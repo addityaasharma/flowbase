@@ -154,15 +154,15 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
   const renderComment = (c: Comment, isReply: boolean) => {
     const tone = toneOf(c.author.id);
     return (
-      <div key={c.id} className="flex gap-2.5">
-        <Avatar user={c.author} size={isReply ? 24 : 28} />
+      <div key={c.id} className="flex gap-2">
+        <Avatar user={c.author} size={isReply ? 20 : 24} />
         <div className="min-w-0 flex-1">
-          <div className={clsx("rounded-2xl border px-4 py-3", tone.soft, tone.border)}>
-            <div className="mb-1 text-xs"><b className={tone.text}>{c.author.name}</b><ViaBadge name={c.viaAgent} /> <span className="text-slate-400">· {fmtTime(c.createdAt)}</span></div>
-            <Markdown source={c.body} />
+          <div className={clsx("rounded-xl border px-3 py-2", tone.soft, tone.border)}>
+            <div className="mb-0.5 text-[11px]"><b className={tone.text}>{c.author.name}</b><ViaBadge name={c.viaAgent} /> <span className="text-slate-400">· {fmtTime(c.createdAt)}</span></div>
+            <div className="text-[13px] leading-snug [&_*]:!text-[13px] [&_p]:my-0.5 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0"><Markdown source={c.body} /></div>
           </div>
           {user && replyTo?.id !== c.id && (
-            <button onClick={() => startReply(c, isReply)} className="ml-2 mt-1 flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-indigo-600"><CornerDownRight className="h-3 w-3" />Reply</button>
+            <button onClick={() => startReply(c, isReply)} className="ml-2 mt-0.5 flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-indigo-600"><CornerDownRight className="h-3 w-3" />Reply</button>
           )}
           {replyTo?.id === c.id && (
             <div className="mt-2 space-y-2">
@@ -236,20 +236,20 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
 
                   <section>
                     <h3 className="mb-3 text-sm font-semibold">Comments <span className="font-normal text-slate-400">({t.comments.length})</span></h3>
-                    <div className="space-y-4">
+                    <div className="space-y-2.5">
                       {t.comments.filter((c) => !c.parentId).map((c) => {
                         const replies = t.comments.filter((r) => r.parentId === c.id);
                         return (
                           <div key={c.id}>
                             {renderComment(c, false)}
-                            {replies.length > 0 && <div className="ml-9 mt-2 space-y-2 border-l-2 border-slate-100 pl-4">{replies.map((r) => renderComment(r, true))}</div>}
+                            {replies.length > 0 && <div className="ml-7 mt-1.5 space-y-1.5 border-l-2 border-slate-100 pl-3">{replies.map((r) => renderComment(r, true))}</div>}
                           </div>
                         );
                       })}
                     </div>
                     {user ? (
-                      <div className="mt-4 space-y-2">
-                        <RichEditor value={comment} onChange={setComment} rows={3} placeholder="Write a comment… (Ctrl+Enter to send)" onSubmit={send} />
+                      <div className="mt-3 space-y-2">
+                        <RichEditor value={comment} onChange={setComment} rows={2} placeholder="Write a comment… (Ctrl+Enter to send)" onSubmit={send} />
                         <div className="flex justify-end"><button className={btnPrimary} disabled={!comment.trim() || addComment.isPending} onClick={send}>{addComment.isPending ? "Sending…" : "Comment"}</button></div>
                       </div>
                     ) : (
