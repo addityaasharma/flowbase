@@ -4,6 +4,7 @@ import type { NextFunction, Request, Response } from "express";
 export function rateLimit(name: string, max: number, windowMs: number) {
   const hits = new Map<string, { n: number; reset: number }>();
   return (req: Request, res: Response, next: NextFunction) => {
+    if (process.env.DISABLE_RATE_LIMIT === "1") return next(); // automated tests only
     const key = `${name}:${req.ip}`;
     const now = Date.now();
     const h = hits.get(key);

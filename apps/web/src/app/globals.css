@@ -53,3 +53,37 @@ button:active:not(:disabled) { transform: scale(0.98); }
 .anim-toast { animation: toast 5.2s cubic-bezier(.2,.8,.2,1) forwards; }
 @keyframes ghost { 0%, 100% { box-shadow: 0 0 0 2px rgb(74 155 255 / .7), 0 12px 32px rgb(0 0 0 / .10); } 50% { box-shadow: 0 0 0 4px rgb(74 155 255 / .35), 0 12px 32px rgb(0 0 0 / .10); } }
 .anim-ghost { animation: ghost 1.4s ease-in-out infinite; }
+
+/* ================= Dark theme =================
+   Components use the palette tokens, so remapping them re-themes everything. Hard-coded white surfaces are overridden below. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-slate-50: #0b0b0e; --color-slate-100: #2a2a2f; --color-slate-200: #34343a; --color-slate-300: #45454c; --color-slate-400: #6e6e76;
+  --color-slate-500: #98989f; --color-slate-600: #b4b4bb; --color-slate-700: #cfcfd5; --color-slate-800: #e6e6ea; --color-slate-900: #f5f5f7;
+  --color-rose-50: color-mix(in oklab, var(--color-rose-500) 16%, #1d1d21); --color-rose-100: color-mix(in oklab, var(--color-rose-500) 26%, #1d1d21); --color-rose-200: color-mix(in oklab, var(--color-rose-500) 40%, #1d1d21); --color-rose-700: var(--color-rose-300);
+  --color-orange-50: color-mix(in oklab, var(--color-orange-500) 16%, #1d1d21); --color-orange-100: color-mix(in oklab, var(--color-orange-500) 26%, #1d1d21); --color-orange-200: color-mix(in oklab, var(--color-orange-500) 40%, #1d1d21); --color-orange-700: var(--color-orange-300);
+  --color-amber-50: color-mix(in oklab, var(--color-amber-500) 16%, #1d1d21); --color-amber-100: color-mix(in oklab, var(--color-amber-500) 26%, #1d1d21); --color-amber-200: color-mix(in oklab, var(--color-amber-500) 40%, #1d1d21); --color-amber-700: var(--color-amber-300);
+  --color-lime-50: color-mix(in oklab, var(--color-lime-500) 16%, #1d1d21); --color-lime-100: color-mix(in oklab, var(--color-lime-500) 26%, #1d1d21); --color-lime-200: color-mix(in oklab, var(--color-lime-500) 40%, #1d1d21); --color-lime-700: var(--color-lime-300);
+  --color-emerald-50: color-mix(in oklab, var(--color-emerald-500) 16%, #1d1d21); --color-emerald-100: color-mix(in oklab, var(--color-emerald-500) 26%, #1d1d21); --color-emerald-200: color-mix(in oklab, var(--color-emerald-500) 40%, #1d1d21); --color-emerald-700: var(--color-emerald-300);
+  --color-teal-50: color-mix(in oklab, var(--color-teal-500) 16%, #1d1d21); --color-teal-100: color-mix(in oklab, var(--color-teal-500) 26%, #1d1d21); --color-teal-200: color-mix(in oklab, var(--color-teal-500) 40%, #1d1d21); --color-teal-700: var(--color-teal-300);
+  --color-cyan-50: color-mix(in oklab, var(--color-cyan-500) 16%, #1d1d21); --color-cyan-100: color-mix(in oklab, var(--color-cyan-500) 26%, #1d1d21); --color-cyan-200: color-mix(in oklab, var(--color-cyan-500) 40%, #1d1d21); --color-cyan-700: var(--color-cyan-300);
+  --color-sky-50: color-mix(in oklab, var(--color-sky-500) 16%, #1d1d21); --color-sky-100: color-mix(in oklab, var(--color-sky-500) 26%, #1d1d21); --color-sky-200: color-mix(in oklab, var(--color-sky-500) 40%, #1d1d21); --color-sky-700: var(--color-sky-300);
+  --color-indigo-50: color-mix(in oklab, var(--color-indigo-500) 16%, #1d1d21); --color-indigo-100: color-mix(in oklab, var(--color-indigo-500) 26%, #1d1d21); --color-indigo-200: color-mix(in oklab, var(--color-indigo-500) 40%, #1d1d21); --color-indigo-700: var(--color-indigo-300);
+  --color-violet-50: color-mix(in oklab, var(--color-violet-500) 16%, #1d1d21); --color-violet-100: color-mix(in oklab, var(--color-violet-500) 26%, #1d1d21); --color-violet-200: color-mix(in oklab, var(--color-violet-500) 40%, #1d1d21); --color-violet-700: var(--color-violet-300);
+  --color-fuchsia-50: color-mix(in oklab, var(--color-fuchsia-500) 16%, #1d1d21); --color-fuchsia-100: color-mix(in oklab, var(--color-fuchsia-500) 26%, #1d1d21); --color-fuchsia-200: color-mix(in oklab, var(--color-fuchsia-500) 40%, #1d1d21); --color-fuchsia-700: var(--color-fuchsia-300);
+  --color-pink-50: color-mix(in oklab, var(--color-pink-500) 16%, #1d1d21); --color-pink-100: color-mix(in oklab, var(--color-pink-500) 26%, #1d1d21); --color-pink-200: color-mix(in oklab, var(--color-pink-500) 40%, #1d1d21); --color-pink-700: var(--color-pink-300);
+}
+:root[data-theme="dark"] body { background: var(--color-slate-50); color: var(--color-slate-900); }
+:root[data-theme="dark"] * { scrollbar-color: #45454c transparent; }
+:root[data-theme="dark"] .bg-white { background-color: #232327; }
+:root[data-theme="dark"] .hover\:bg-white:hover { background-color: #2c2c31; }
+:root[data-theme="dark"] .hover\:bg-white\/80:hover { background-color: rgb(255 255 255 / 0.06); }
+:root[data-theme="dark"] .ring-white { --tw-ring-color: #232327; }
+:root[data-theme="dark"] .border-white\/60 { border-color: rgb(255 255 255 / 0.10); }
+:root[data-theme="dark"] .glass { background: rgb(14 14 17 / 0.78); }
+:root[data-theme="dark"] .bg-slate-900 { background-color: #0e0e11; }
+:root[data-theme="dark"] .text-slate-100 { color: #e6e6ea; }
+:root[data-theme="dark"] .shadow-card { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.05), 0 2px 8px rgb(0 0 0 / 0.4); }
+:root[data-theme="dark"] input::placeholder, :root[data-theme="dark"] textarea::placeholder { color: #77777f; }
+:root[data-theme="dark"] .bg-slate-50 { background-color: #1a1a1e; }
+:root[data-theme="dark"] .hover\:bg-slate-50:hover { background-color: #2a2a2f; }

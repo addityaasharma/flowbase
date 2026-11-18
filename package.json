@@ -9,7 +9,8 @@
     "typecheck": "turbo run typecheck",
     "db:up": "docker compose up -d db",
     "db:migrate": "pnpm --filter @bitcode/api prisma migrate dev",
-    "db:seed": "pnpm --filter @bitcode/api db:seed"
+    "db:seed": "pnpm --filter @bitcode/api db:seed",
+    "test": "turbo run test"
   },
   "devDependencies": {
     "turbo": "^2.5.0",

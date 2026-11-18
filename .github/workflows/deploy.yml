@@ -30,9 +30,35 @@ jobs:
           NEXT_PUBLIC_API_URL: /api
           NEXT_TELEMETRY_DISABLED: "1"
 
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:                     # a throw-away database for the API integration tests
+        image: postgres:16-alpine
+        env: { POSTGRES_USER: test, POSTGRES_PASSWORD: test, POSTGRES_DB: flowbase_test }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U test" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/flowbase_test?schema=public
+      JWT_SECRET: ci-test-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @bitcode/shared build
+      - run: pnpm --filter @bitcode/api exec prisma generate
+      - run: pnpm --filter @bitcode/api exec prisma migrate deploy
+      - run: pnpm test
+
   deploy:
     name: Deploy to server
-    needs: build
+    needs: [build, test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:

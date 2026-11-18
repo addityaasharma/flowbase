@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Bot, Check, FolderPlus, LogOut, Trash2 } from "lucide-react";
 import { DeleteProjectModal } from "@/components/DeleteProjectModal";
 import { DeveloperAccess } from "@/components/DeveloperAccess";
+import { useTheme } from "@/lib/theme";
 import type { Project } from "@/lib/types";
 import { api, tokenStore } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -54,6 +55,7 @@ export default function Profile() {
   const [error, setError] = useState("");
   const [toDelete, setToDelete] = useState<Project | null>(null);
   const [devOpen, setDevOpen] = useState(false);
+  const theme = useTheme();
   if (!user) return null;
   const dirty = name.trim() !== user.name && name.trim().length > 0;
 
@@ -92,6 +94,13 @@ export default function Profile() {
         </section>
 
         <ChangePassword />
+
+        <section className="flex items-center justify-between gap-3 rounded-[28px] bg-white p-5 shadow-card">
+          <div><h3 className="font-semibold">Appearance</h3><p className="text-xs text-slate-500">Auto follows your device</p></div>
+          <div className="flex gap-0.5 rounded-full bg-slate-200/70 p-1 text-xs font-medium">
+            {(["auto", "light", "dark"] as const).map((c) => <button key={c} onClick={() => theme.set(c)} className={"rounded-full px-3 py-1.5 capitalize " + (theme.choice === c ? "bg-white text-slate-900 shadow-card" : "text-slate-600")}>{c}</button>)}
+          </div>
+        </section>
 
         <button onClick={() => setDevOpen(true)} className="flex w-full items-center gap-3 rounded-[28px] bg-white p-5 text-left shadow-card transition hover:shadow-lift">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-600"><Bot className="h-5 w-5" /></span>

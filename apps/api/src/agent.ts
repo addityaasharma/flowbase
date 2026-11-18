@@ -129,7 +129,7 @@ export const tools = {
 const wrap = (fn: (req: Request, res: Response) => Promise<unknown>) => (req: Request, res: Response, next: NextFunction) => fn(req, res).catch(next);
 const fail = (res: Response, e: unknown) => {
   if (e instanceof AgentError) return res.status(e.status).json({ error: e.message });
-  if (e instanceof z.ZodError) return res.status(400).json({ error: e.issues.map((i) => i.message).join(", ") });
+  if (e instanceof z.ZodError || (e as { name?: string })?.name === "ZodError") return res.status(400).json({ error: (e as z.ZodError).issues.map((i) => i.message).join(", ") });
   throw e;
 };
 export const agentRouter = Router();
@@ -140,6 +140,8 @@ agentRouter.get("/tasks", wrap(async (req, res) => { try { res.json(await tools.
 agentRouter.get("/tasks/:ref", wrap(async (req, res) => { try { res.json(await tools.get_task(req.agent!, { task: req.params.ref })); } catch (e) { fail(res, e); } }));
 agentRouter.post("/tasks/:ref/comments", wrap(async (req, res) => { try { res.status(201).json(await tools.comment_on_task(req.agent!, { task: req.params.ref, body: req.body?.body, reply_to_comment_id: req.body?.parentId })); } catch (e) { fail(res, e); } }));
 agentRouter.post("/tasks/:ref/status", wrap(async (req, res) => { try { res.json(await tools.set_task_status(req.agent!, { task: req.params.ref, status: req.body?.status })); } catch (e) { fail(res, e); } }));
+
+agentRouter.use((_req, res) => res.status(404).json({ error: "Unknown agent endpoint. Agents can only read tasks, comment and change the status of their own tasks." }));
 
 // ---- MCP (Streamable HTTP, stateless): /api/mcp
 const TOOLS = [
@@ -173,7 +175,7 @@ async function handleRpc(a: Agent, m: Rpc) {
       if (!fn) return err(-32602, `Unknown tool: ${name}`);
       try { return ok({ content: [{ type: "text", text: JSON.stringify(await fn(a, args as never), null, 2) }] }); }
       catch (e) {
-        if (e instanceof AgentError || e instanceof z.ZodError) return ok({ isError: true, content: [{ type: "text", text: e instanceof z.ZodError ? e.issues.map((i) => i.message).join(", ") : e.message }] });
+        if (e instanceof AgentError || (e as { name?: string })?.name === "ZodError") return ok({ isError: true, content: [{ type: "text", text: e instanceof AgentError ? e.message : (e as z.ZodError).issues.map((i) => i.message).join(", ") }] });
         console.error(e); return ok({ isError: true, content: [{ type: "text", text: "Something went wrong on the Flowbase server." }] });
       }
     }

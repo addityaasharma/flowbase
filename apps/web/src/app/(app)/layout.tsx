@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import clsx from "clsx";
-import { Keyboard, LayoutGrid, ListChecks, FolderPlus, LogIn, LogOut, Plus, Users } from "lucide-react";
+import { ChevronDown, Keyboard, LayoutGrid, Moon, Sun, ListChecks, FolderPlus, LogIn, LogOut, Plus, Users } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { WorkspaceProvider, useWorkspace } from "@/lib/workspace";
 import { Avatar, btnPrimary } from "@/components/Bits";
@@ -18,6 +18,7 @@ import { OnlinePill } from "@/components/OnlinePill";
 import { VerifyBanner } from "@/components/VerifyBanner";
 import { FilterBar } from "@/components/FilterBar";
 import { ShortcutsHelp } from "@/components/ShortcutsHelp";
+import { useTheme } from "@/lib/theme";
 import { RealtimeProvider, useRealtime } from "@/lib/realtime";
 import { STATUSES } from "@bitcode/shared";
 
@@ -64,6 +65,11 @@ function Shell({ children }: { children: React.ReactNode }) {
   const hasProject = !!user && !!w.project;
   const router = useRouter();
   const [help, setHelp] = useState(false);
+  // The summary tiles can be folded away to give the board more room; the choice is remembered in this browser.
+  const [statsOpen, setStatsOpen] = useState(true);
+  useEffect(() => { try { if (localStorage.getItem("flowbase:summary") === "closed") setStatsOpen(false); } catch { /* default: open */ } }, []);
+  const toggleStats = () => setStatsOpen((v) => { try { localStorage.setItem("flowbase:summary", v ? "closed" : "open"); } catch { /* not remembered */ } return !v; });
+  const theme = useTheme();
 
   // Keyboard shortcuts (ignored while typing in a field, or with Ctrl/Cmd/Alt held)
   useEffect(() => {
@@ -124,6 +130,7 @@ function Shell({ children }: { children: React.ReactNode }) {
               onClick={() => requireAuth(() => w.setNewProject(true))}><FolderPlus className="h-4 w-4" />New Project</button>
             </div>
             <div className="flex items-center gap-2">
+            <button onClick={theme.toggle} title={theme.dark ? "Switch to light mode" : "Switch to dark mode"} aria-label="Toggle dark mode" className="hidden h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200/70 hover:text-slate-900 md:flex">{theme.dark ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}</button>
             <button onClick={() => setHelp(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" className="hidden h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200/70 hover:text-slate-900 md:flex"><Keyboard className="h-[18px] w-[18px]" /></button>
             {hasProject && <div className="hidden sm:block"><OnlinePill /></div>}
             <NotificationBell />
@@ -140,13 +147,27 @@ function Shell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </div>
-        {hasProject && path !== "/profile" && <div className="mx-auto hidden max-w-[1600px] grid-cols-4 gap-3 px-6 pb-4 md:grid">
-          {stats.map(([label, n, cls]) => (
-            <div key={label} className={clsx("flex items-baseline justify-between rounded-2xl bg-white px-5 py-3 shadow-card", cls)}>
-              <span className="text-[13px] font-medium">{label}</span><span className="text-3xl font-semibold tracking-tight text-slate-900">{n}</span>
+        {hasProject && path !== "/profile" && (
+          <div className="hidden md:block">
+            <div className="mx-auto max-w-[1600px] px-6 pb-1.5">
+              <button type="button" onClick={toggleStats} aria-expanded={statsOpen} className="group flex items-center gap-1.5 rounded-full py-0.5 pr-2 text-xs font-medium text-slate-500 hover:text-slate-900">
+                <ChevronDown className={clsx("h-4 w-4 transition-transform duration-300", !statsOpen && "-rotate-90")} />Summary
+                {!statsOpen && <span className="ml-1 font-normal text-slate-400">{stats.map(([label, n]) => `${n} ${label.toLowerCase()}`).join(" · ")}</span>}
+              </button>
             </div>
-          ))}
-        </div>}
+            <div className={clsx("grid transition-[grid-template-rows] duration-300 ease-out", statsOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}>
+              <div className="min-h-0 overflow-hidden">
+                <div className="mx-auto grid max-w-[1600px] grid-cols-4 gap-3 px-6 pb-4">
+                  {stats.map(([label, n, cls]) => (
+                    <div key={label} className={clsx("flex items-baseline justify-between rounded-2xl bg-white px-5 py-3 shadow-card", cls)}>
+                      <span className="text-[13px] font-medium">{label}</span><span className="text-3xl font-semibold tracking-tight text-slate-900">{n}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </header>
       {hasProject && (path === "/" || path === "/tickets") && <FilterBar />}
       <main className="min-h-0 w-full flex-1 overflow-y-auto"><div className="mx-auto h-full max-w-[1600px] px-4 pb-6 pt-4 sm:px-6 sm:pt-5">{loading ? null : empty && !(user && path === "/profile") ? <Welcome /> : children}</div></main>

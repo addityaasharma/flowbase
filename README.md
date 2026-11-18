@@ -54,3 +54,11 @@ Claude clones the repo and does the work on *your* machine with *your* git acces
 
 `deploy/backup.sh` (nightly database + uploads, 14 days), `deploy/restore-test.sh`, and `deploy/healthcheck.sh` (cron every 5 minutes, emails
 `ALERT_EMAIL` about downtime, disk, or missing backups). See `deploy/DEPLOY.md`.
+
+## Quality
+
+`pnpm test` runs the web unit tests (Markdown renderer security, per-person colours) and the API integration tests (needs `DATABASE_URL`):
+accounts and email verification, privacy between projects, who may edit/move/delete, replies, subtasks, attached repos, agent tokens and the
+MCP endpoint, image uploads. The GitHub pipeline runs them against a throw-away Postgres before every deploy; a failing test stops the release.
+
+Also: dark mode (Profile → Appearance, follows the device by default), keyboard shortcuts (`?` lists them), phone layout, collapsible summary tiles.
