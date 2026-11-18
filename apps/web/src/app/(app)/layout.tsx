@@ -86,7 +86,8 @@ function Shell({ children }: { children: React.ReactNode }) {
               </Link>
             ))}
           </nav>}
-          <div className="flex items-center gap-3">
+          <div className="flex w-full flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
             {hasProject && <>
             <select className="rounded-full bg-slate-200/70 px-4 py-2 text-sm font-medium outline-none hover:bg-slate-200" value={w.assignee} onChange={(e) => w.setAssignee(e.target.value)}>
               <option value="all">Everyone ({w.project?.members.length ?? 0})</option>
@@ -96,6 +97,8 @@ function Shell({ children }: { children: React.ReactNode }) {
             <button className={btnPrimary + " py-2.5 shadow-card"} onClick={() => requireAuth(() => w.setRaise(true))}><Plus className="h-4 w-4" />Raise Ticket</button></>}
             <button className="inline-flex items-center gap-2 rounded-full bg-slate-200/70 px-4 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-200"
               onClick={() => requireAuth(() => w.setNewProject(true))}><FolderPlus className="h-4 w-4" />New Project</button>
+            </div>
+            <div className="flex items-center gap-2">
             {hasProject && <OnlinePill />}
             <NotificationBell />
             {user ? (
@@ -103,11 +106,12 @@ function Shell({ children }: { children: React.ReactNode }) {
                 <Link href="/profile" title="Your profile" className={clsx("flex items-center gap-2 rounded-full py-1 pl-1 pr-3 text-sm font-medium transition", path === "/profile" ? "bg-white shadow-card" : "hover:bg-slate-200/70")}>
                   <Avatar user={user} size={32} /><span className="max-w-24 truncate">{user.name.split(" ")[0]}</span>
                 </Link>
-                <button onClick={logout} title="Sign out" className="rounded p-1.5 text-slate-400 hover:bg-slate-100"><LogOut className="h-4 w-4" /></button>
+                <button onClick={logout} title="Sign out" aria-label="Sign out" className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200/70 hover:text-slate-900"><LogOut className="h-4 w-4" /></button>
               </div>
             ) : (
               <button onClick={() => setSignInOpen(true)} className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50"><LogIn className="h-4 w-4" />Sign in</button>
             )}
+            </div>
           </div>
         </div>
         {hasProject && path !== "/profile" && <div className="mx-auto grid max-w-[1600px] grid-cols-2 gap-3 px-6 pb-4 md:grid-cols-4">
