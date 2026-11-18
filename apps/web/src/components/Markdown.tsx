@@ -2,10 +2,12 @@
 import { useEffect, useState } from "react";
 import clsx from "clsx";
 import { renderMarkdown } from "@/lib/markdown";
+import { useWorkspace } from "@/lib/workspace";
 
 /** Renders Markdown safely; clicking an image opens it full-size. */
 export function Markdown({ source, className }: { source: string; className?: string }) {
   const [zoom, setZoom] = useState<{ src: string; alt: string } | null>(null);
+  const { toneOf } = useWorkspace();
   useEffect(() => {
     if (!zoom) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); setZoom(null); } };
@@ -14,7 +16,7 @@ export function Markdown({ source, className }: { source: string; className?: st
   }, [zoom]);
   return (
     <div className={clsx("text-sm leading-relaxed text-slate-800", className)}>
-      {renderMarkdown(source, { onImage: (src, alt) => setZoom({ src, alt }) })}
+      {renderMarkdown(source, { onImage: (src, alt) => setZoom({ src, alt }), toneOf })}
       {zoom && (
         <div className="anim-fade fixed inset-0 z-[80] flex cursor-zoom-out items-center justify-center bg-black/75 p-6" onClick={() => setZoom(null)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}

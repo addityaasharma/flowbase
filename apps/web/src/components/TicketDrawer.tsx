@@ -13,6 +13,23 @@ import { AssigneePicker, Avatar, PriorityPill, StatusPill, TypeIcon, btnGhost, b
 import { Markdown } from "./Markdown";
 import { RichEditor } from "./RichEditor";
 
+/** Add a label with Enter or comma; click × to remove. */
+function LabelsEditor({ labels, onChange }: { labels: string[]; onChange: (l: string[]) => void }) {
+  const [text, setText] = useState("");
+  const add = () => { const v = text.trim().replace(/,/g, "").slice(0, 30); if (v && !labels.includes(v) && labels.length < 12) onChange([...labels, v]); setText(""); };
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {labels.map((l) => (
+        <span key={l} className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">{l}
+          <button type="button" aria-label={`Remove ${l}`} onClick={() => onChange(labels.filter((x) => x !== l))} className="text-slate-400 hover:text-rose-600 disabled:hidden"><X className="h-3 w-3" /></button></span>
+      ))}
+      <input value={text} onChange={(e) => (e.target.value.endsWith(",") ? (setText(e.target.value), add()) : setText(e.target.value))}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} onBlur={add} placeholder={labels.length ? "Add…" : "Add a label"}
+        className="min-w-20 flex-1 rounded-full bg-transparent px-2 py-1 text-xs outline-none placeholder:text-slate-400 disabled:hidden" />
+    </div>
+  );
+}
+
 const Label = ({ children }: { children: React.ReactNode }) => <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{children}</div>;
 
 /** Ticket details: a wide two-column panel. Left: title, description, comments. Right: properties and activity. */
@@ -44,7 +61,7 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
   const canDelete = !!user && !!t && t.reporter.id === user.id;                                                   // only the creator can delete
   const canEdit = !!user && !!t && (t.reporter.id === user.id || t.assignees.some((a) => a.id === user.id));     // an assignee or the creator; others can comment
   const sendReply = () => { if (replyTo && replyText.trim() && !reply.isPending) reply.mutate({ parentId: replyTo.id, body: replyText }); };
-  const startReply = (c: Comment, isReply: boolean) => { setReplyTo({ id: c.id, name: c.author.name }); setReplyText(isReply ? `@${c.author.name} ` : ""); };
+  const startReply = (c: Comment, isReply: boolean) => { setReplyTo({ id: c.id, name: c.author.name }); setReplyText(isReply ? `@[${c.author.name}](u:${c.author.id}) ` : ""); };
   const send = () => { if (comment.trim() && !addComment.isPending) addComment.mutate(); };
   const startEdit = () => { setDescDraft(t?.description ?? ""); setEditingDesc(true); };
   const saveDesc = () => patch.mutate({ description: descDraft }, { onSuccess: () => setEditingDesc(false) });
@@ -166,6 +183,7 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                         <AssigneePicker members={members} value={t.assignees.map((a) => a.id)} disabled={!canEdit} onChange={(ids) => patch.mutate({ assigneeIds: ids })} /></div>
                       <div><Label>Due date</Label>
                         <input type="date" className={inputCls + " bg-white"} value={t.dueDate?.slice(0, 10) ?? ""} onChange={(e) => patch.mutate({ dueDate: e.target.value || null })} /></div>
+                      <div><Label>Labels</Label><LabelsEditor labels={t.labels} onChange={(labels) => patch.mutate({ labels })} /></div>
                     </fieldset>
                   </div>
 

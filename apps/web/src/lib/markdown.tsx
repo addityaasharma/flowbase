@@ -17,9 +17,9 @@ export function imageSrc(u: string): string | null {
 }
 const linkHref = (u: string) => (/^(https?:\/\/|mailto:)[^\s"'<>]+$/i.test(u) ? u : null);
 
-export type MdOptions = { onImage?: (src: string, alt: string) => void };
+export type MdOptions = { onImage?: (src: string, alt: string) => void; toneOf?: (userId: string) => { soft: string; text: string } };
 
-const INLINE = String.raw`!\[(?<ialt>[^\]]*)\]\((?<isrc>[^)\s]+)\)|\[(?<ltxt>[^\]]+)\]\((?<lurl>[^)\s]+)\)|\x60(?<code>[^\x60]+)\x60|\*\*(?<bold>[^*]+)\*\*|\*(?<em>[^*\s][^*]*)\*|(?<auto>https?:\/\/[^\s<]+[^\s<.,;:!?)\]])`;
+const INLINE = String.raw`@\[(?<mname>[^\]]+)\]\(u:(?<mid>[a-z0-9]+)\)|!\[(?<ialt>[^\]]*)\]\((?<isrc>[^)\s]+)\)|\[(?<ltxt>[^\]]+)\]\((?<lurl>[^)\s]+)\)|\x60(?<code>[^\x60]+)\x60|\*\*(?<bold>[^*]+)\*\*|\*(?<em>[^*\s][^*]*)\*|(?<auto>https?:\/\/[^\s<]+[^\s<.,;:!?)\]])`;
 const A = "text-indigo-600 underline underline-offset-2 hover:text-indigo-700 break-words";
 
 function inline(text: string, key: string, o: MdOptions): ReactNode[] {
@@ -29,7 +29,10 @@ function inline(text: string, key: string, o: MdOptions): ReactNode[] {
   while ((m = re.exec(text))) {
     if (m.index > last) out.push(text.slice(last, m.index));
     const g = m.groups!, k = `${key}.${n++}`;
-    if (g.isrc !== undefined) {
+    if (g.mname !== undefined) {
+      const tone = o.toneOf?.(g.mid);
+      out.push(<span key={k} className={"rounded-md px-1 py-px font-medium " + (tone ? `${tone.soft} ${tone.text}` : "bg-indigo-50 text-indigo-700")}>@{g.mname}</span>);
+    } else if (g.isrc !== undefined) {
       const src = imageSrc(g.isrc);
       out.push(src
         // eslint-disable-next-line @next/next/no-img-element

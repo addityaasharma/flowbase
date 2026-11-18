@@ -96,6 +96,7 @@ model Ticket {
   comments    Comment[]
   activities  Activity[]
   notifications Notification[]
+  reminders   Reminder[]
 
   @@unique([projectId, number])
   @@index([projectId, status, position])
@@ -197,4 +198,16 @@ model AuthToken {
   createdAt DateTime  @default(now())
 
   @@index([userId, kind])
+}
+
+/// Remembers which due-date reminders were already sent, so each one goes out once (a new due date re-arms it).
+model Reminder {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  kind      String   // "due-soon" | "overdue"
+  dueDate   DateTime
+  sentAt    DateTime @default(now())
+
+  @@unique([ticketId, kind, dueDate])
 }

@@ -4,6 +4,8 @@ import { flushSync } from "react-dom";
 import clsx from "clsx";
 import { Bold, Code, ImagePlus, Italic, Link2, List, ListChecks, ListOrdered } from "lucide-react";
 import { uploadImage } from "@/lib/api";
+import { useWorkspace } from "@/lib/workspace";
+import { Avatar } from "./Bits";
 import { Markdown } from "./Markdown";
 
 const MAX = 5 * 1024 * 1024;
@@ -24,6 +26,21 @@ export function RichEditor({ value, onChange, placeholder, rows = 4, onSubmit, a
   const [busy, setBusy] = useState(0);
   const [err, setErr] = useState("");
   const [drag, setDrag] = useState(false);
+  const { members } = useWorkspace();
+  const [mention, setMention] = useState<{ at: number; query: string } | null>(null);
+  const [mIdx, setMIdx] = useState(0);
+  // "@" at the start of a word, followed by what has been typed so far (up to 24 characters, no line break)
+  const detect = (v: string, caret: number) => {
+    let i = caret;
+    while (i > 0 && v[i - 1] !== "@" && v[i - 1] !== "\n" && caret - i < 24) i--;
+    return i > 0 && v[i - 1] === "@" && (i - 1 === 0 || /\s/.test(v[i - 2])) ? { at: i - 1, query: v.slice(i, caret) } : null;
+  };
+  const matches = mention ? members.filter((m) => m.name.toLowerCase().includes(mention.query.toLowerCase())).slice(0, 6) : [];
+  const pick = (m: { id: string; name: string }) => {
+    if (!mention) return;
+    const v = valueRef.current, caret = ref.current?.selectionStart ?? v.length, ins = `@[${m.name}](u:${m.id}) `;
+    setMention(null); commit(v.slice(0, mention.at) + ins + v.slice(caret), mention.at + ins.length);
+  };
   // focus with the caret AFTER any existing text (e.g. a prefilled "@Name "), not at the start
   useEffect(() => { const t = ref.current; if (autoFocus && t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); selRef.current = t.value.length; } // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -72,6 +89,11 @@ export function RichEditor({ value, onChange, placeholder, rows = 4, onSubmit, a
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mention && matches.length) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); setMIdx((i) => (i + (e.key === "ArrowDown" ? 1 : matches.length - 1)) % matches.length); return; }
+      if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); pick(matches[Math.min(mIdx, matches.length - 1)]); return; }
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setMention(null); return; }
+    }
     const mod = e.metaKey || e.ctrlKey, k = e.key.toLowerCase();
     if (mod && e.key === "Enter") { e.preventDefault(); onSubmit?.(); return; }
     if (mod && k === "b") { e.preventDefault(); wrap("**", "**", "bold text"); return; }
@@ -117,7 +139,7 @@ export function RichEditor({ value, onChange, placeholder, rows = 4, onSubmit, a
       </div>
       {tab === "write" ? (
         <textarea ref={ref} rows={rows} value={value} placeholder={placeholder}
-          onChange={(e) => { onChange(e.target.value); selRef.current = e.target.selectionStart; }}
+          onChange={(e) => { onChange(e.target.value); selRef.current = e.target.selectionStart; setMention(detect(e.target.value, e.target.selectionStart)); setMIdx(0); }}
           onSelect={(e) => { selRef.current = e.currentTarget.selectionStart; }}
           onKeyDown={onKeyDown}
           onPaste={(e) => { const f = [...e.clipboardData.files]; if (f.some((x) => x.type.startsWith("image/"))) { e.preventDefault(); upload(f); } }}
@@ -126,6 +148,14 @@ export function RichEditor({ value, onChange, placeholder, rows = 4, onSubmit, a
           className="block w-full resize-y bg-transparent px-3.5 py-2.5 text-sm outline-none placeholder:text-slate-400" />
       ) : (
         <div className="min-h-20 px-3.5 py-2.5">{value.trim() ? <Markdown source={value} /> : <p className="text-sm text-slate-400">Nothing to preview yet</p>}</div>
+      )}
+      {tab === "write" && mention && matches.length > 0 && (
+        <ul role="listbox" aria-label="Mention someone" className="border-t border-black/5 bg-white p-1">
+          {matches.map((m, i) => (
+            <li key={m.id}><button type="button" role="option" aria-selected={i === mIdx} onMouseDown={(e) => e.preventDefault()} onClick={() => pick(m)}
+              className={clsx("flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm", i === mIdx ? "bg-indigo-50" : "hover:bg-slate-50")}><Avatar user={m} size={20} />{m.name}</button></li>
+          ))}
+        </ul>
       )}
       {err && <p className="border-t border-black/5 px-3.5 py-1.5 text-xs text-rose-600">{err}</p>}
       <input ref={file} type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden onChange={(e) => { upload([...(e.target.files ?? [])]); e.target.value = ""; }} />

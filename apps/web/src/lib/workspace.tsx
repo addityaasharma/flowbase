@@ -5,9 +5,15 @@ import type { Role } from "@bitcode/shared";
 import { api } from "./api";
 import { useAuth } from "./auth";
 import type { Project, Ticket, User } from "./types";
+import type { Priority } from "@bitcode/shared";
 import { assignTones, toneByHash, type Tone } from "./tones";
 
+export type Filters = { q: string; priorities: Priority[]; label: string; due: "" | "overdue" | "week" | "none"; mine: boolean };
+export const NO_FILTERS: Filters = { q: "", priorities: [], label: "", due: "", mine: false };
+export const filtersActive = (f: Filters) => !!(f.q || f.priorities.length || f.label || f.due || f.mine);
+
 type Ctx = {
+  filters: Filters; setFilters: (f: Filters) => void; allLabels: string[]; totalCount: number;
   projects: Project[]; projectsLoaded: boolean; project: Project | undefined; setProjectId: (id: string) => void;
   toneOf: (userId: string) => Tone; // colour of a person, unique within the open project
   members: User[]; myRole: Role | null; canManage: boolean; // canManage = admin or manager of the current project
@@ -30,6 +36,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [projectId, setProjectId] = useState(readSavedProject);
   const [assignee, setAssignee] = useState("all");
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [openId, openTicket] = useState<string | null>(null);
   const [raise, setRaise] = useState(false);
   const [newProject, setNewProject] = useState(false);
@@ -65,16 +72,31 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     queryFn: () => api<Ticket[]>(`/tickets?projectId=${project!.id}`),
   });
   const list = project ? tickets.data ?? [] : [];
-  const filtered = list.filter((t) => assignee === "all" ? true : assignee === "unassigned" ? t.assignees.length === 0 : t.assignees.some((a) => a.id === assignee));
+  const today = new Date().toISOString().slice(0, 10), weekEnd = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
+  const q = filters.q.trim().toLowerCase();
+  const filtered = list.filter((t) => {
+    if (!(assignee === "all" ? true : assignee === "unassigned" ? t.assignees.length === 0 : t.assignees.some((a) => a.id === assignee))) return false;
+    if (q && !`${t.key} ${t.title} ${t.description ?? ""} ${t.labels.join(" ")}`.toLowerCase().includes(q)) return false;
+    if (filters.priorities.length && !filters.priorities.includes(t.priority)) return false;
+    if (filters.label && !t.labels.includes(filters.label)) return false;
+    if (filters.mine && !t.assignees.some((a) => a.id === user?.id)) return false;
+    const due = t.dueDate?.slice(0, 10);
+    if (filters.due === "none" && due) return false;
+    if (filters.due === "overdue" && !(due && due < today && t.status !== "DONE")) return false;
+    if (filters.due === "week" && !(due && due >= today && due <= weekEnd && t.status !== "DONE")) return false;
+    return true;
+  });
+  const allLabels = [...new Set(list.flatMap((t) => t.labels))].sort();
   const myRole = project?.myRole ?? null;
   const tones = useMemo(() => assignTones((project?.members ?? []).map((m) => m.id)), [project]);
   const toneOf = (id: string) => tones.get(id) ?? toneByHash(id);
 
   return (
     <C.Provider value={{
-      projects: projects.data ?? [], projectsLoaded: projects.isSuccess, project, setProjectId: (id) => { setProjectId(id); setAssignee("all"); },
+      projects: projects.data ?? [], projectsLoaded: projects.isSuccess, project, setProjectId: (id) => { setProjectId(id); setAssignee("all"); setFilters(NO_FILTERS); },
       toneOf, members: project?.members ?? [], myRole, canManage: myRole === "ADMIN" || myRole === "MANAGER",
       assignee, setAssignee, tickets: filtered, refetchTickets: () => tickets.refetch(), openTicket, openId,
+      filters, setFilters, allLabels, totalCount: list.length,
       goToTicket, raise, setRaise, newProject, setNewProject,
     }}>{children}</C.Provider>
   );

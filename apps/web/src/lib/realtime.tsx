@@ -7,7 +7,7 @@ import { useAuth } from "./auth";
 import { useWorkspace } from "./workspace";
 import type { Ticket } from "./types";
 
-export type ToastKind = "moved" | "created" | "comment" | "updated" | "deleted" | "member" | "denied" | "assigned";
+export type ToastKind = "moved" | "created" | "comment" | "updated" | "deleted" | "member" | "denied" | "assigned" | "due" | "mention";
 export type Toast = { id: number; kind: ToastKind; actor: { id: string; name: string } | null; text: string; ticketId?: string };
 export type RemoteDrag = { ticketId: string; actorId: string; actorName: string; col?: Status; index?: number; seen: number };
 
@@ -99,6 +99,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         case "comment.created":
           q(); if (t) qc.invalidateQueries({ queryKey: ["ticket", t.id] });
           if (!mine && t) toast("comment", e.actor, `commented on ${t.key}: “${e.body}”`, t.id); break;
+        case "project.updated": qc.invalidateQueries({ queryKey: ["projects"] }); break;
         case "member.joined": qc.invalidateQueries({ queryKey: ["projects"] }); if (!mine) toast("member", e.actor, "joined the project"); break;
         case "member.role": qc.invalidateQueries({ queryKey: ["projects"] }); if (!mine) toast("member", e.actor, `changed a member’s role to ${e.role}`); break;
         case "member.removed": qc.invalidateQueries({ queryKey: ["projects"] }); if (!mine) toast("member", e.actor, e.userId === meRef.current ? "removed you from the project" : "removed a member"); break;

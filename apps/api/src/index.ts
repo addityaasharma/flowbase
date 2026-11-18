@@ -4,6 +4,7 @@ import cors from "cors";
 import { ZodError } from "zod";
 import { router } from "./routes";
 import { startUploadCleanup } from "./cleanup";
+import { startReminderJob } from "./reminders";
 import { alertError } from "./mail";
 
 const app = express();
@@ -31,4 +32,4 @@ process.on("unhandledRejection", (e) => { console.error("unhandledRejection", e)
 process.on("uncaughtException", (e) => { console.error("uncaughtException", e); alertError("uncaught exception", e).finally(() => process.exit(1)); });
 
 const port = Number(process.env.PORT) || 4000;
-app.listen(port, () => { console.log(`API listening on :${port}`); startUploadCleanup(); });
+app.listen(port, () => { console.log(`API listening on :${port}`); startUploadCleanup(); startReminderJob(); });

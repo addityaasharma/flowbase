@@ -14,7 +14,7 @@ import type { Ticket } from "@/lib/types";
 import { useWorkspace } from "@/lib/workspace";
 import { useAuth } from "@/lib/auth";
 import { useRealtime } from "@/lib/realtime";
-import { AssigneeStack, PriorityPill, TypeIcon, assigneeLabel } from "./Bits";
+import { AssigneeStack, DueChip, PriorityPill, TypeIcon, assigneeLabel } from "./Bits";
 
 type Cols = Record<Status, Ticket[]>;
 const group = (tickets: Ticket[]): Cols => {
@@ -57,6 +57,7 @@ function Card({ t, onOpen, onAdvance, overlay, canAdvance = true }: { t: Ticket;
         <PriorityPill p={t.priority} />
       </div>
       <button className="mb-3 w-full text-left text-[15px] font-semibold leading-snug hover:text-indigo-600" onClick={onOpen}>{t.title}</button>
+      {t.dueDate && t.status !== "DONE" && <div className="mb-3"><DueChip due={t.dueDate} done={false} /></div>}
       {t.labels.length > 0 && <div className="mb-3 flex flex-wrap gap-1">{t.labels.map((l) => <span key={l} className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{l}</span>)}</div>}
       <div className={clsx("flex items-center justify-between border-t border-slate-100 pt-3", t.assignees.length > 1 && "flex-wrap gap-y-2")}>
         <span className={clsx("flex items-center gap-2 text-sm", t.assignees.length > 1 ? "shrink-0" : "min-w-0")}><AssigneeStack users={t.assignees} /><span className="truncate" title={t.assignees.map((a) => a.name).join(", ")}>{assigneeLabel(t.assignees)}</span>

@@ -18,6 +18,7 @@ export const PRIORITY_LABEL: Record<Priority, string> = {
 };
 
 export const loginSchema = z.object({ email: z.string().email(), password: z.string().min(1) });
+export const updateProjectSchema = z.object({ name: z.string().trim().min(1).max(80).optional(), description: z.string().trim().max(500).nullable().optional() });
 export const forgotSchema = z.object({ email: z.string().email().max(200) });
 export const resetSchema = z.object({ token: z.string().min(10).max(200), password: z.string().min(8).max(200) });
 export const verifySchema = z.object({ token: z.string().min(10).max(200) });

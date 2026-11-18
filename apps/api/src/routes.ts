@@ -3,14 +3,14 @@ import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { z } from "zod";
 import {
-  loginSchema, registerSchema, forgotSchema, resetSchema, verifySchema, createProjectSchema, createTicketSchema, updateTicketSchema, moveTicketSchema,
+  loginSchema, registerSchema, forgotSchema, resetSchema, verifySchema, createProjectSchema, updateProjectSchema, createTicketSchema, updateTicketSchema, moveTicketSchema,
   commentSchema, inviteSchema, acceptInviteSchema, memberRoleSchema, STATUS_LABEL, PRIORITY_LABEL, type Role, type Status,
 } from "@bitcode/shared";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { requireAuth, signToken } from "./auth";
 import { rateLimit } from "./rateLimit";
-import { sendAssignmentEmail, sendInviteEmail, sendPasswordResetEmail, sendVerifyEmail } from "./mail";
+import { sendAssignmentEmail, sendInviteEmail, sendMentionEmail, sendPasswordResetEmail, sendVerifyEmail } from "./mail";
 import { grant, openStream, publish, revoke } from "./events";
 import { notify, ticketAudience } from "./notifications";
 import express from "express";
@@ -28,9 +28,28 @@ const WEB_URL = () => (process.env.WEB_URL || "http://localhost:3000").replace(/
 const memberOf = (userId: string, projectId: string) =>
   prisma.projectMember.findUnique({ where: { projectId_userId: { projectId, userId } } });
 
+/** @[Name](u:<userId>) tokens written by the editor's @-autocomplete. */
+const mentionIds = (text: string) => [...new Set([...text.matchAll(/@\[[^\]]+\]\(u:([a-z0-9]{8,40})\)/g)].map((m) => m[1]))];
+/** Mentions only count for people who are in the project (and never for yourself). */
+async function validMentions(projectId: string, ids: string[], actorId: string) {
+  const want = ids.filter((id) => id !== actorId);
+  if (!want.length) return [] as { id: string; name: string; email: string }[];
+  const rows = await prisma.projectMember.findMany({ where: { projectId, userId: { in: want } }, select: { user: { select: { id: true, name: true, email: true, active: true } } } });
+  return rows.map((r) => r.user).filter((u) => u.active);
+}
+async function notifyMentions(o: { text: string; skip?: string[]; actor: { id: string; name: string }; projectId: string; ticketId: string; key: string; title: string }) {
+  const people = (await validMentions(o.projectId, mentionIds(o.text), o.actor.id)).filter((u) => !o.skip?.includes(u.id));
+  if (!people.length) return [] as string[];
+  const excerpt = plainExcerpt(o.text);
+  await notify({ userIds: people.map((u) => u.id), actor: o.actor, kind: "mention", text: `mentioned you in ${o.key}: “${excerpt}”`, projectId: o.projectId, ticketId: o.ticketId });
+  const project = await prisma.project.findUnique({ where: { id: o.projectId }, select: { name: true } });
+  for (const u of people) sendMentionEmail({ to: u.email, name: u.name, actor: o.actor.name, project: project?.name ?? "", ticket: { key: o.key, title: o.title }, excerpt, link: `${WEB_URL()}/?ticket=${o.ticketId}` }).catch(console.error);
+  return people.map((u) => u.id);
+}
+
 /** One-line, markdown-free preview of a comment for notifications. */
 const plainExcerpt = (md: string) => {
-  const t = md.replace(/!\[[^\]]*\]\([^)]*\)/g, "[image]").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[`*_>#]|^\s*(?:[-*]|\d+\.)\s+(?:\[[ xX]\]\s+)?/gm, "").replace(/\s+/g, " ").trim();
+  const t = md.replace(/@\[([^\]]+)\]\(u:[^)]*\)/g, "@$1").replace(/!\[[^\]]*\]\([^)]*\)/g, "[image]").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[`*_>#]|^\s*(?:[-*]|\d+\.)\s+(?:\[[ xX]\]\s+)?/gm, "").replace(/\s+/g, " ").trim();
   return t.length > 80 ? t.slice(0, 80) + "…" : t;
 };
 const actorOf = (req: Request) => ({ id: req.user!.id, name: req.user!.name });
@@ -253,6 +272,14 @@ router.post("/projects", rateLimit("project", 20, 60 * 60_000), wrap(async (req,
   res.status(201).json(p);
 }));
 
+router.patch("/projects/:id", wrap(async (req, res) => {
+  if (!(await projectAccess(req, res, req.params.id, ["ADMIN"]))) return;
+  const d = updateProjectSchema.parse(req.body);
+  const p = await prisma.project.update({ where: { id: req.params.id }, data: { ...(d.name !== undefined ? { name: d.name } : {}), ...(d.description !== undefined ? { description: d.description || null } : {}) }, select: { id: true, name: true, description: true } });
+  publish({ type: "project.updated", projectId: p.id, actor: actorOf(req), name: p.name });
+  res.json(p);
+}));
+
 router.delete("/projects/:id", wrap(async (req, res) => {
   if (!(await projectAccess(req, res, req.params.id, ["ADMIN"]))) return;
   const doomed = await prisma.project.findUnique({ where: { id: req.params.id }, select: { name: true } });
@@ -401,6 +428,7 @@ router.post("/tickets", rateLimit("ticket", 300, 60 * 60_000), wrap(async (req, 
   await log(t.id, req.user!.id, "created this ticket");
   const created = withKey(t);
   void emailNewAssignees(t.id, d.assigneeIds ?? [], actorOf(req)).catch(console.error);
+  if (d.description) void notifyMentions({ text: d.description, actor: actorOf(req), projectId: d.projectId, ticketId: t.id, key: created.key, title: t.title }).catch(console.error);
   void notify({ userIds: d.assigneeIds ?? [], actor: actorOf(req), kind: "assigned", text: `assigned you ${created.key} “${t.title}”`, projectId: d.projectId, ticketId: t.id }).catch(console.error);
   publish({ type: "ticket.created", projectId: d.projectId, actor: actorOf(req), ticket: { id: t.id, key: created.key, title: t.title, status: t.status } });
   res.status(201).json(created);
@@ -448,6 +476,7 @@ router.patch("/tickets/:id", wrap(async (req, res) => {
   const out = withKey(updated);
   if (changes.length) publish({ type: "ticket.updated", projectId: t.projectId, actor: actorOf(req), ticket: { id: t.id, key: out.key, title: updated.title }, changes });
   const who = actorOf(req), base = { actor: who, projectId: t.projectId, ticketId: t.id };
+  if (d.description) void notifyMentions({ text: d.description, skip: mentionIds(t.description ?? ""), actor: who, projectId: t.projectId, ticketId: t.id, key: out.key, title: updated.title }).catch(console.error);
   if (added.length) void notify({ ...base, userIds: added, kind: "assigned", text: `assigned you ${out.key} “${updated.title}”` }).catch(console.error);
   if (removed.length) void notify({ ...base, userIds: removed, kind: "assigned", text: `unassigned you from ${out.key} “${updated.title}”` }).catch(console.error);
   if (changes.length) void ticketAudience(t.id).then((aud) => notify({ ...base, userIds: aud.filter((id) => !added.includes(id)), kind: "updated", text: `${changes.join(", ")} on ${out.key}` })).catch(console.error);
@@ -511,8 +540,9 @@ router.post("/tickets/:id/comments", wrap(async (req, res) => {
   const key = withKey(t).key, excerpt = plainExcerpt(body), who = actorOf(req);
   publish({ type: "comment.created", projectId: t.projectId, actor: who, ticket: { id: t.id, key, title: t.title }, body: excerpt, reply: !!rootId });
   const base = { actor: who, projectId: t.projectId, ticketId: t.id, kind: "comment" };
-  if (replyTo && replyTo.authorId !== who.id) void notify({ ...base, userIds: [replyTo.authorId], text: `replied to your comment on ${key}: “${excerpt}”` }).catch(console.error);
-  void ticketAudience(t.id).then((aud) => notify({ ...base, userIds: aud.filter((id) => id !== replyTo?.authorId), text: `${rootId ? "replied" : "commented"} on ${key}: “${excerpt}”` })).catch(console.error);
+  const mentioned = await notifyMentions({ text: body, actor: who, projectId: t.projectId, ticketId: t.id, key, title: t.title }).catch((e) => { console.error(e); return [] as string[]; });
+  if (replyTo && replyTo.authorId !== who.id && !mentioned.includes(replyTo.authorId)) void notify({ ...base, userIds: [replyTo.authorId], text: `replied to your comment on ${key}: “${excerpt}”` }).catch(console.error);
+  void ticketAudience(t.id).then((aud) => notify({ ...base, userIds: aud.filter((id) => id !== replyTo?.authorId && !mentioned.includes(id)), text: `${rootId ? "replied" : "commented"} on ${key}: “${excerpt}”` })).catch(console.error);
   res.status(201).json(c);
 }));
 

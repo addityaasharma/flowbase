@@ -51,6 +51,15 @@ export function AssigneePicker({ members, value, onChange, disabled }: { members
   );
 }
 
+/** "Due Nov 20", amber when due within a day, red when overdue. Done tickets show nothing. */
+export function DueChip({ due, done }: { due: string | null; done: boolean }) {
+  if (!due || done) return null;
+  const d = due.slice(0, 10), today = new Date().toISOString().slice(0, 10), tomorrow = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
+  const nice = new Date(d + "T00:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+  const [cls, text] = d < today ? ["bg-rose-50 text-rose-600", `Overdue · ${nice}`] : d === today ? ["bg-amber-50 text-amber-700", "Due today"] : d === tomorrow ? ["bg-amber-50 text-amber-700", "Due tomorrow"] : ["bg-slate-100 text-slate-600", `Due ${nice}`];
+  return <span className={clsx("inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium", cls)}>{text}</span>;
+}
+
 export const PriorityPill = ({ p }: { p: Priority }) => (
   <span className={clsx("rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide", PRIORITY_PILL[p])}>{PRIORITY_LABEL[p]}</span>
 );

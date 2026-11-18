@@ -86,6 +86,27 @@ export function renderAssignmentEmail(o: AssignmentMail) {
   return { subject, html };
 }
 
+export function sendMentionEmail(o: { to: string; name: string; actor: string; project: string; ticket: { key: string; title: string }; excerpt: string; link: string }) {
+  const html = shell(`${esc(o.actor)} mentioned you`,
+    `<p style="color:#6e6e73;line-height:1.5">Hi ${esc(o.name.split(" ")[0])}, you were mentioned on <b>${esc(o.ticket.key)} “${esc(o.ticket.title)}”</b> in ${esc(o.project)}.</p>
+     <div style="background:#f5f5f7;border-radius:16px;padding:14px 18px;margin:16px 0;font-size:14px;color:#1d1d1f">“${esc(o.excerpt)}”</div>${button(o.link, "Open task")}`,
+    `You're receiving this because someone mentioned you on Flowbase.`);
+  return deliver(o.to, `${o.actor} mentioned you on ${o.ticket.key}`.slice(0, 150), html, o.link);
+}
+
+export function sendReminderEmail(o: { to: string; name: string; kind: "due-soon" | "overdue"; ticket: { key: string; title: string; due: string }; project: string; link: string }) {
+  const overdue = o.kind === "overdue";
+  const html = shell(overdue ? "A task is overdue" : "A task is due tomorrow",
+    `<p style="color:#6e6e73;line-height:1.5">Hi ${esc(o.name.split(" ")[0])}, ${overdue ? "this task you're assigned to has passed its due date" : "this task you're assigned to is due tomorrow"}.</p>
+     <div style="background:#f5f5f7;border-radius:16px;padding:16px 18px;margin:16px 0">
+       <div style="color:#86868b;font-size:12px;font-weight:600">${esc(o.ticket.key)} · ${esc(o.project)}</div>
+       <div style="font-size:17px;font-weight:600;margin:2px 0 6px">${esc(o.ticket.title)}</div>
+       <div style="font-size:14px;color:${overdue ? "#d70015" : "#1d1d1f"}">Due ${esc(o.ticket.due)}</div>
+     </div>${button(o.link, "Open task")}`,
+    `You're receiving this because you're assigned to this task on Flowbase.`);
+  return deliver(o.to, `${overdue ? "Overdue" : "Due tomorrow"}: ${o.ticket.key} ${o.ticket.title}`.slice(0, 150), html, o.link);
+}
+
 export function sendAssignmentEmail(o: AssignmentMail) {
   const { subject, html } = renderAssignmentEmail(o);
   return deliver(o.to, subject, html, o.link);

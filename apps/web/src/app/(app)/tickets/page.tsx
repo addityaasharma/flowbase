@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
-import { PRIORITIES, PRIORITY_LABEL, STATUSES, STATUS_LABEL } from "@bitcode/shared";
-import { Search } from "lucide-react";
+import { STATUSES, STATUS_LABEL } from "@bitcode/shared";
 import { useWorkspace } from "@/lib/workspace";
 import { useAuth } from "@/lib/auth";
 import { AssigneeStack, assigneeLabel, PriorityPill, StatusPill, TypeIcon, inputCls } from "@/components/Bits";
@@ -9,19 +8,13 @@ import { AssigneeStack, assigneeLabel, PriorityPill, StatusPill, TypeIcon, input
 export default function AllTickets() {
   const { tickets, openTicket } = useWorkspace();
   const { user } = useAuth();
-  const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
-  const [priority, setPriority] = useState("");
-  const rows = tickets.filter((t) =>
-    (!q || (t.title + t.key).toLowerCase().includes(q.toLowerCase())) && (!status || t.status === status) && (!priority || t.priority === priority));
+  const rows = tickets.filter((t) => !status || t.status === status);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-60"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-          <input className={inputCls + " pl-9"} placeholder="Search tickets…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
         <select className={inputCls + " !w-44"} value={status} onChange={(e) => setStatus(e.target.value)}><option value="">All statuses</option>{STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}</select>
-        <select className={inputCls + " !w-44"} value={priority} onChange={(e) => setPriority(e.target.value)}><option value="">All priorities</option>{PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>)}</select>
       </div>
       <div className="overflow-x-auto rounded-[24px] bg-white shadow-card">
         <table className="w-full text-left text-sm">

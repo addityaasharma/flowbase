@@ -15,6 +15,7 @@ import { FlowbaseMark } from "@/components/Logo";
 import { NotificationBell } from "@/components/NotificationBell";
 import { OnlinePill } from "@/components/OnlinePill";
 import { VerifyBanner } from "@/components/VerifyBanner";
+import { FilterBar } from "@/components/FilterBar";
 import { RealtimeProvider, useRealtime } from "@/lib/realtime";
 import { STATUSES } from "@bitcode/shared";
 
@@ -124,6 +125,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           ))}
         </div>}
       </header>
+      {hasProject && (path === "/" || path === "/tickets") && <FilterBar />}
       <main className="min-h-0 w-full flex-1 overflow-y-auto"><div className="mx-auto h-full max-w-[1600px] px-6 pb-6 pt-5">{loading ? null : empty && !(user && path === "/profile") ? <Welcome /> : children}</div></main>
       <SignInPopover />
       <Toasts />
