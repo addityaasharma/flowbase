@@ -70,7 +70,7 @@ export function DeveloperAccess({ onClose }: { onClose: () => void }) {
                 ["collaborator", "Collaborator (recommended)", "Works like a teammate: reads every task in your projects, comments, raises and edits tickets, assigns several people, moves tasks, subtasks, repos."],
                 ["full", "Full access", "Everything you can do after login, including deleting tickets, managing projects, members and invitations. Never your password, tokens or sign-in."],
               ] as const).map(([v, t, d]) => (
-                <label key={v} className={"flex cursor-pointer items-start gap-2.5 rounded-2xl border p-3 " + (level === v ? "border-indigo-500 bg-white" : "border-transparent bg-white/60")}>
+                <label key={v} className={"flex cursor-pointer items-start gap-2.5 rounded-2xl border p-3 " + (level === v ? "border-indigo-500 bg-white" : "border-slate-200 bg-white")}>
                   <input type="radio" name="level" className="mt-1 accent-indigo-600" checked={level === v} onChange={() => setLevel(v)} />
                   <span><b>{t}</b><span className="block text-xs text-slate-500">{d}</span></span>
                 </label>))}
