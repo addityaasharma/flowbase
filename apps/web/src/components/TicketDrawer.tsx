@@ -47,8 +47,14 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
         {!t ? <p className="p-8 text-slate-500">Loading…</p> : (
           <>
             <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-8 py-4">
-              <div className="flex min-w-0 items-center gap-3 text-sm font-semibold text-slate-500">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold text-slate-500">
                 <TypeIcon t={t.type} />{t.key}<StatusPill s={t.status} /><PriorityPill p={t.priority} />
+                <span className="ml-1 hidden min-w-0 items-center gap-1.5 text-xs font-normal text-slate-400 md:flex">
+                  <span className="h-3.5 w-px bg-slate-200" />
+                  <span>Reported by <b className={"font-semibold " + toneOf(t.reporter.id).text}>{t.reporter.name}</b></span>
+                  <span>· Created {fmtTime(t.createdAt)}</span>
+                  <span>· Updated {fmtTime(t.updatedAt)}</span>
+                </span>
               </div>
               <div className="flex items-center gap-1">
                 {canDelete && <button className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-slate-500 hover:bg-rose-50 hover:text-rose-600" onClick={() => confirm("Delete this ticket? This can’t be undone.") && del.mutate()}><Trash2 className="h-4 w-4" />Delete</button>}
@@ -56,10 +62,11 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
               </div>
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <div className="grid gap-8 p-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+            {/* wide screens: two columns that scroll on their own; narrow screens: one scroll */}
+            <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
+              <>
                 {/* ---------- main column ---------- */}
-                <div className="min-w-0 space-y-7">
+                <div className="min-w-0 space-y-7 p-8 lg:min-h-0 lg:overflow-y-auto">
                   {user && !canEdit && (
                     <p className="flex items-start gap-2 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800"><Lock className="mt-0.5 h-4 w-4 shrink-0" />You can’t edit this ticket because it isn’t assigned to you. Only its assignees or the person who created it can change it. You can still comment below.</p>
                   )}
@@ -116,7 +123,7 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                 </div>
 
                 {/* ---------- side column ---------- */}
-                <div className="min-w-0 space-y-5">
+                <div className="min-w-0 space-y-5 p-8 lg:min-h-0 lg:overflow-y-auto lg:pl-4">
                   <div className="rounded-3xl bg-slate-50 p-5">
                     <fieldset disabled={!canEdit} className="m-0 min-w-0 space-y-4 border-0 p-0">
                       <div><Label>Status</Label>
@@ -128,11 +135,6 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                       <div><Label>Due date</Label>
                         <input type="date" className={inputCls + " bg-white"} value={t.dueDate?.slice(0, 10) ?? ""} onChange={(e) => patch.mutate({ dueDate: e.target.value || null })} /></div>
                     </fieldset>
-                    <dl className="mt-5 space-y-2 border-t border-slate-200 pt-4 text-xs text-slate-500">
-                      <div className="flex justify-between gap-3"><dt>Reported by</dt><dd><b className={toneOf(t.reporter.id).text}>{t.reporter.name}</b></dd></div>
-                      <div className="flex justify-between gap-3"><dt>Created</dt><dd>{fmtTime(t.createdAt)}</dd></div>
-                      <div className="flex justify-between gap-3"><dt>Updated</dt><dd>{fmtTime(t.updatedAt)}</dd></div>
-                    </dl>
                   </div>
 
                   <section className="px-1">
@@ -157,7 +159,7 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                     )}
                   </section>
                 </div>
-              </div>
+              </>
             </div>
           </>
         )}
