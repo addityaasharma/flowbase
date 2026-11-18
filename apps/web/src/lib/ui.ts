@@ -18,5 +18,3 @@ export const NEXT_ACTION: Partial<Record<Status, { label: string; to: Status }>>
   IN_REVIEW: { label: "Mark Done", to: "DONE" },
   BLOCKED: { label: "Unblock", to: "IN_PROGRESS" },
 };
-const COLORS = ["bg-rose-600", "bg-amber-600", "bg-emerald-600", "bg-teal-600", "bg-violet-600", "bg-indigo-600", "bg-sky-600"];
-export const avatarColor = (id: string) => COLORS[[...id].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];

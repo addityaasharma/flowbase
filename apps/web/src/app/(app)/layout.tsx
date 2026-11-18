@@ -61,19 +61,19 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <header className="glass z-40 shrink-0 border-b border-black/5">
-        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-4 px-6 py-4">
-          <div className="flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-slate-100 text-slate-800 shadow-card ring-1 ring-black/5"><FlowbaseMark className="h-6 w-auto" /></span>
+        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-4 px-6 py-3">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-800 shadow-card ring-1 ring-black/5"><FlowbaseMark className="h-[18px] w-auto" /></span>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-[22px] font-semibold tracking-tight">Flowbase</h1>
+                <h1 className="text-lg font-semibold leading-tight tracking-tight">Flowbase</h1>
                 {hasProject && (rt.connected
-                  ? <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700" title="Updates appear instantly">● Live</span>
-                  : <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700" title="Reconnecting…">● Reconnecting…</span>)}
+                  ? <span className="rounded-full bg-emerald-50 px-2 py-px text-[10px] font-medium text-emerald-700" title="Updates appear instantly">● Live</span>
+                  : <span className="rounded-full bg-amber-50 px-2 py-px text-[10px] font-medium text-amber-700" title="Reconnecting…">● Reconnecting…</span>)}
               </div>
-              {hasProject ? <select className="-ml-1 bg-transparent text-sm text-slate-500 outline-none" value={w.project?.id ?? ""} onChange={(e) => w.setProjectId(e.target.value)}>
+              {hasProject ? <select className="-ml-1 bg-transparent text-xs leading-tight text-slate-500 outline-none" value={w.project?.id ?? ""} onChange={(e) => w.setProjectId(e.target.value)}>
                 {w.projects.map((p) => <option key={p.id} value={p.id}>{p.name} • {p.members.length} Members</option>)}
-              </select> : <p className="text-sm text-slate-500">Work tracking for teams</p>}
+              </select> : <p className="text-xs text-slate-500">Work tracking for teams</p>}
             </div>
           </div>
           {hasProject && <nav className="flex gap-0.5 rounded-full bg-slate-200/70 p-1">

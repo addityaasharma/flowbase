@@ -4,14 +4,16 @@ import crypto from "node:crypto";
 import { z } from "zod";
 import {
   loginSchema, registerSchema, createProjectSchema, createTicketSchema, updateTicketSchema, moveTicketSchema,
-  commentSchema, inviteSchema, acceptInviteSchema, memberRoleSchema, STATUS_LABEL, type Role, type Status,
+  commentSchema, inviteSchema, acceptInviteSchema, memberRoleSchema, STATUS_LABEL, PRIORITY_LABEL, type Role, type Status,
 } from "@bitcode/shared";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { requireAuth, signToken } from "./auth";
 import { rateLimit } from "./rateLimit";
-import { sendInviteEmail } from "./mail";
+import { sendAssignmentEmail, sendInviteEmail } from "./mail";
 import { grant, openStream, publish, revoke } from "./events";
+import express from "express";
+import { MAX_UPLOAD_BYTES, saveUpload, serveUpload } from "./uploads";
 import { STATUSES } from "@bitcode/shared";
 import { flattenMembers, ticketInclude, userSelect, withKey } from "./serialize";
 
@@ -25,10 +27,32 @@ const WEB_URL = () => (process.env.WEB_URL || "http://localhost:3000").replace(/
 const memberOf = (userId: string, projectId: string) =>
   prisma.projectMember.findUnique({ where: { projectId_userId: { projectId, userId } } });
 
+/** One-line, markdown-free preview of a comment for notifications. */
+const plainExcerpt = (md: string) => {
+  const t = md.replace(/!\[[^\]]*\]\([^)]*\)/g, "[image]").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[`*_>#]|^\s*(?:[-*]|\d+\.)\s+(?:\[[ xX]\]\s+)?/gm, "").replace(/\s+/g, " ").trim();
+  return t.length > 80 ? t.slice(0, 80) + "…" : t;
+};
 const actorOf = (req: Request) => ({ id: req.user!.id, name: req.user!.name });
 /** Only an assignee or the creator may change/move a ticket; everyone else in the project can read and comment. */
 const canEditTicket = (t: { reporterId: string; assignees: { userId: string }[] }, userId: string) => t.reporterId === userId || t.assignees.some((a) => a.userId === userId);
 const NOT_ALLOWED = { error: "Only the assignees or the person who created this ticket can change it. You can still comment." };
+
+/** Emails the people who were just assigned (never the person who made the assignment). Fire-and-forget: a mail problem must not fail the request. */
+async function emailNewAssignees(ticketId: string, userIds: string[], actor: { id: string; name: string }) {
+  const ids = [...new Set(userIds)].filter((id) => id !== actor.id);
+  if (!ids.length) return;
+  const [t, users] = await Promise.all([
+    prisma.ticket.findUnique({ where: { id: ticketId }, include: { project: { select: { name: true, key: true } } } }),
+    prisma.user.findMany({ where: { id: { in: ids }, active: true }, select: { email: true, name: true } }),
+  ]);
+  if (!t) return;
+  for (const u of users) {
+    sendAssignmentEmail({
+      to: u.email, name: u.name, actor: actor.name, project: t.project.name, link: `${WEB_URL()}/?ticket=${t.id}`,
+      ticket: { key: `${t.project.key}-${t.number}`, title: t.title, priority: PRIORITY_LABEL[t.priority], status: STATUS_LABEL[t.status], dueDate: t.dueDate },
+    }).then((r) => { if (!r.sent) console.warn(`[mail] assignment email to ${u.email} not sent: ${r.error}`); }).catch((e) => console.error(e));
+  }
+}
 
 /** Resolves the caller's role in a project, or sends 403/404 and returns null. */
 async function projectAccess(req: Request, res: Response, projectId: string, allow?: Role[]) {
@@ -93,6 +117,9 @@ router.post("/invitations/accept", rateLimit("accept", 20, 15 * 60_000), wrap(as
   res.status(201).json({ token: signToken(user.id), user: { id: user.id, name: user.name, email: user.email, title: user.title, active: user.active } });
 }));
 
+// Images are fetched by <img> tags (no auth header), so the file URL itself is the secret: 128 random bits, never listed anywhere.
+router.get("/uploads/:name", serveUpload);
+
 // ================= everything below needs a signed-in user =================
 router.use(requireAuth);
 
@@ -101,6 +128,8 @@ router.get("/auth/me", wrap(async (req, res) => {
 }));
 
 router.get("/events", wrap((req, res) => openStream(req, res)));
+
+router.post("/uploads", rateLimit("upload", 60, 60 * 60_000), express.raw({ type: () => true, limit: MAX_UPLOAD_BYTES }), wrap(saveUpload));
 
 router.patch("/auth/me", wrap(async (req, res) => {
   const { name } = z.object({ name: z.string().trim().min(1).max(80) }).parse(req.body);
@@ -142,7 +171,8 @@ router.post("/projects", rateLimit("project", 20, 60 * 60_000), wrap(async (req,
 
 router.delete("/projects/:id", wrap(async (req, res) => {
   if (!(await projectAccess(req, res, req.params.id, ["ADMIN"]))) return;
-  publish({ type: "project.deleted", projectId: req.params.id, actor: actorOf(req) });
+  const doomed = await prisma.project.findUnique({ where: { id: req.params.id }, select: { name: true } });
+  publish({ type: "project.deleted", projectId: req.params.id, actor: actorOf(req), name: doomed?.name });
   await prisma.project.delete({ where: { id: req.params.id } });
   revoke(req.params.id);
   res.json({ ok: true });
@@ -278,6 +308,7 @@ router.post("/tickets", rateLimit("ticket", 300, 60 * 60_000), wrap(async (req, 
   });
   await log(t.id, req.user!.id, "created this ticket");
   const created = withKey(t);
+  void emailNewAssignees(t.id, d.assigneeIds ?? [], actorOf(req)).catch(console.error);
   publish({ type: "ticket.created", projectId: d.projectId, actor: actorOf(req), ticket: { id: t.id, key: created.key, title: t.title, status: t.status } });
   res.status(201).json(created);
 }));
@@ -318,7 +349,7 @@ router.patch("/tickets/:id", wrap(async (req, res) => {
   if (d.title && d.title !== t.title) changes.push("renamed the ticket");
   if (d.priority && d.priority !== t.priority) changes.push(`set priority to ${d.priority.toLowerCase()}`);
   if (d.status && d.status !== t.status) changes.push(`moved to ${STATUS_LABEL[d.status]}`);
-  if (added.length) changes.push(`assigned ${await names(added)}`);
+  if (added.length) { changes.push(`assigned ${await names(added)}`); void emailNewAssignees(t.id, added, actorOf(req)).catch(console.error); }
   if (removed.length) changes.push(`unassigned ${await names(removed)}`);
   for (const c of changes) await log(t.id, req.user!.id, c);
   const out = withKey(updated);
@@ -369,7 +400,7 @@ router.post("/tickets/:id/comments", wrap(async (req, res) => {
   const t = await loadTicket(req, res); if (!t) return;
   const { body } = commentSchema.parse(req.body);
   const c = await prisma.comment.create({ data: { ticketId: t.id, authorId: req.user!.id, body }, include: { author: { select: userSelect } } });
-  publish({ type: "comment.created", projectId: t.projectId, actor: actorOf(req), ticket: { id: t.id, key: withKey(t).key, title: t.title }, body: body.length > 80 ? body.slice(0, 80) + "…" : body });
+  publish({ type: "comment.created", projectId: t.projectId, actor: actorOf(req), ticket: { id: t.id, key: withKey(t).key, title: t.title }, body: plainExcerpt(body) });
   res.status(201).json(c);
 }));
 

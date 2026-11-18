@@ -27,3 +27,15 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
   if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
   return data as T;
 }
+
+/** Uploads one image (PNG/JPEG/GIF/WebP, ≤5 MB) and returns the stored path, e.g. /api/uploads/<name>.png */
+export async function uploadImage(file: File): Promise<string> {
+  const res = await fetch(API_BASE + "/uploads", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${tokenStore.get() ?? ""}`, "Content-Type": file.type || "application/octet-stream" },
+    body: file,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "Image upload failed");
+  return data.url as string;
+}

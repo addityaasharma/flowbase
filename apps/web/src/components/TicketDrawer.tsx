@@ -1,21 +1,30 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import clsx from "clsx";
 import { PRIORITIES, PRIORITY_LABEL, STATUSES, STATUS_LABEL } from "@bitcode/shared";
-import { Lock, Trash2 } from "lucide-react";
+import { ChevronDown, Lock, Pencil, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useWorkspace } from "@/lib/workspace";
+import { fmtTime } from "@/lib/tones";
 import type { TicketDetail } from "@/lib/types";
-import { AssigneePicker, Avatar, TypeIcon, btnPrimary, inputCls } from "./Bits";
+import { AssigneePicker, Avatar, PriorityPill, StatusPill, TypeIcon, btnGhost, btnPrimary, inputCls } from "./Bits";
+import { Markdown } from "./Markdown";
+import { RichEditor } from "./RichEditor";
 
+const Label = ({ children }: { children: React.ReactNode }) => <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{children}</div>;
+
+/** Ticket details: a wide two-column panel. Left: title, description, comments. Right: properties and activity. */
 export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void }) {
-  const { user } = useAuth();
-  const { members, openTicket } = useWorkspace();
-  const { requireAuth } = useAuth();
+  const { user, requireAuth } = useAuth();
+  const { members, openTicket, toneOf } = useWorkspace();
   const qc = useQueryClient();
   const [comment, setComment] = useState("");
-  const q = useQuery({ queryKey: ["ticket", id], queryFn: () => api<TicketDetail>(`/tickets/${id}`), refetchInterval: 30000 }); // live updates arrive over the event stream; this is only a safety net
+  const [showActivity, setShowActivity] = useState(false);
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [descDraft, setDescDraft] = useState("");
+  const q = useQuery({ queryKey: ["ticket", id], queryFn: () => api<TicketDetail>(`/tickets/${id}`), refetchInterval: 30000 }); // live updates arrive over the event stream; this is a safety net
   const refresh = () => { qc.invalidateQueries({ queryKey: ["ticket", id] }); qc.invalidateQueries({ queryKey: ["tickets"] }); };
   const patch = useMutation({ mutationFn: (json: object) => api(`/tickets/${id}`, { method: "PATCH", json }), onSuccess: refresh });
   const addComment = useMutation({
@@ -23,66 +32,134 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
     onSuccess: () => { setComment(""); refresh(); },
   });
   const del = useMutation({ mutationFn: () => api(`/tickets/${id}`, { method: "DELETE" }), onSuccess: () => { qc.invalidateQueries({ queryKey: ["tickets"] }); openTicket(null); } });
+  useEffect(() => { setEditingDesc(false); setShowActivity(false); setComment(""); }, [id]);
+
   const t = q.data;
-  const canDelete = !!user && !!q.data && q.data.reporter.id === user.id; // only the creator can delete
-  const canEdit = !!user && !!t && (t.reporter.id === user.id || t.assignees.some((a) => a.id === user.id)); // an assignee or the creator; others can comment
+  const canDelete = !!user && !!t && t.reporter.id === user.id;                                                   // only the creator can delete
+  const canEdit = !!user && !!t && (t.reporter.id === user.id || t.assignees.some((a) => a.id === user.id));     // an assignee or the creator; others can comment
+  const send = () => { if (comment.trim() && !addComment.isPending) addComment.mutate(); };
+  const startEdit = () => { setDescDraft(t?.description ?? ""); setEditingDesc(true); };
+  const saveDesc = () => patch.mutate({ description: descDraft }, { onSuccess: () => setEditingDesc(false) });
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/25 backdrop-blur-sm anim-fade" onMouseDown={onClose}>
-      <aside className="anim-slide h-full w-full max-w-xl overflow-y-auto rounded-l-[32px] bg-white p-8 shadow-lift" onMouseDown={(e) => e.stopPropagation()}>
-        {!t ? <p className="text-slate-500">Loading…</p> : (
-          <div className="space-y-5">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-500"><TypeIcon t={t.type} />{t.key}</div>
-              <div className="flex gap-1">
-                {canDelete && <button className="rounded p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" onClick={() => confirm("Delete this ticket?") && del.mutate()}><Trash2 className="h-4 w-4" /></button>}
-                <button onClick={onClose} className="rounded p-1.5 text-slate-400 hover:bg-slate-100">✕</button>
+    <div className="anim-fade fixed inset-0 z-50 flex justify-end bg-black/25 backdrop-blur-sm" onMouseDown={onClose}>
+      <aside className="anim-slide flex h-full w-full flex-col overflow-hidden bg-white shadow-lift sm:w-[65vw] sm:min-w-[min(100%,720px)] sm:max-w-[1400px] sm:rounded-l-[32px]" onMouseDown={(e) => e.stopPropagation()}>
+        {!t ? <p className="p-8 text-slate-500">Loading…</p> : (
+          <>
+            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-8 py-4">
+              <div className="flex min-w-0 items-center gap-3 text-sm font-semibold text-slate-500">
+                <TypeIcon t={t.type} />{t.key}<StatusPill s={t.status} /><PriorityPill p={t.priority} />
               </div>
-            </div>
-            {user && !canEdit && <p className="flex items-start gap-2 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800"><Lock className="mt-0.5 h-4 w-4 shrink-0" />You can’t edit this ticket because it isn’t assigned to you. Only its assignees or the person who created it can change it. You can still comment below.</p>}
-            <fieldset disabled={!canEdit} className="m-0 min-w-0 space-y-5 border-0 p-0">
-            <input key={t.updatedAt + "title"} className="w-full rounded-lg border border-transparent px-2 py-1 text-2xl font-semibold tracking-tight hover:border-slate-200 focus:border-indigo-500 focus:outline-none"
-              defaultValue={t.title} onBlur={(e) => e.target.value.trim() && e.target.value !== t.title && patch.mutate({ title: e.target.value.trim() })} />
-            <textarea key={t.updatedAt + "desc"} className={inputCls} rows={5} placeholder="Add a description…" defaultValue={t.description ?? ""}
-              onBlur={(e) => e.target.value !== (t.description ?? "") && patch.mutate({ description: e.target.value })} />
-            <div className="grid grid-cols-2 gap-3 text-xs font-medium text-slate-500">
-              <label>Status<select className={inputCls} value={t.status} onChange={(e) => patch.mutate({ status: e.target.value })}>{STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}</select></label>
-              <label>Priority<select className={inputCls} value={t.priority} onChange={(e) => patch.mutate({ priority: e.target.value })}>{PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>)}</select></label>
-              <div className="col-span-2"><div className="mb-1">Assigned to · {t.assignees.length} {t.assignees.length === 1 ? "person" : "people"}</div>
-                <AssigneePicker members={members} value={t.assignees.map((a) => a.id)} disabled={!canEdit} onChange={(ids) => patch.mutate({ assigneeIds: ids })} /></div>
-              <label>Due date<input type="date" className={inputCls} value={t.dueDate?.slice(0, 10) ?? ""} onChange={(e) => patch.mutate({ dueDate: e.target.value || null })} /></label>
-            </div>
-            </fieldset>
-            <p className="text-xs text-slate-500">Reported by {t.reporter.name} · {new Date(t.createdAt).toLocaleString()}</p>
+              <div className="flex items-center gap-1">
+                {canDelete && <button className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-slate-500 hover:bg-rose-50 hover:text-rose-600" onClick={() => confirm("Delete this ticket? This can’t be undone.") && del.mutate()}><Trash2 className="h-4 w-4" />Delete</button>}
+                <button onClick={onClose} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+              </div>
+            </header>
 
-            <section>
-              <h3 className="mb-2 text-sm font-semibold">Comments ({t.comments.length})</h3>
-              <div className="space-y-3">
-                {t.comments.map((c) => (
-                  <div key={c.id} className="flex gap-2.5"><Avatar user={c.author} />
-                    <div className="flex-1 rounded-2xl bg-slate-100 px-3.5 py-2.5 text-sm">
-                      <div className="text-xs text-slate-500"><b className="text-slate-700">{c.author.name}</b> · {new Date(c.createdAt).toLocaleString()}</div>
-                      <p className="whitespace-pre-wrap">{c.body}</p>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="grid gap-8 p-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+                {/* ---------- main column ---------- */}
+                <div className="min-w-0 space-y-7">
+                  {user && !canEdit && (
+                    <p className="flex items-start gap-2 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800"><Lock className="mt-0.5 h-4 w-4 shrink-0" />You can’t edit this ticket because it isn’t assigned to you. Only its assignees or the person who created it can change it. You can still comment below.</p>
+                  )}
+                  <fieldset disabled={!canEdit} className="m-0 min-w-0 border-0 p-0">
+                    <input key={t.updatedAt + "title"} className="w-full rounded-xl border border-transparent px-2 py-1 text-2xl font-semibold tracking-tight hover:border-slate-200 focus:border-indigo-500 focus:outline-none disabled:hover:border-transparent"
+                      defaultValue={t.title} onBlur={(e) => e.target.value.trim() && e.target.value !== t.title && patch.mutate({ title: e.target.value.trim() })} />
+                  </fieldset>
+
+                  <section>
+                    <div className="mb-2 flex items-center justify-between">
+                      <h3 className="text-sm font-semibold">Description</h3>
+                      {canEdit && !editingDesc && t.description && <button onClick={startEdit} className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-indigo-600"><Pencil className="h-3.5 w-3.5" />Edit</button>}
                     </div>
-                  </div>
-                ))}
-              </div>
-              <form className={"mt-3 flex gap-2" + (user ? "" : " hidden")} onSubmit={(e) => { e.preventDefault(); comment.trim() && addComment.mutate(); }}>
-                <input className={inputCls} placeholder="Write a comment…" value={comment} onChange={(e) => setComment(e.target.value)} />
-                <button className={btnPrimary} disabled={addComment.isPending}>Send</button>
-              </form>
-            </section>
+                    {editingDesc ? (
+                      <div className="space-y-2">
+                        <RichEditor value={descDraft} onChange={setDescDraft} rows={8} autoFocus placeholder="Describe the task. Use bullets, checklists, or paste an image." onSubmit={saveDesc} />
+                        <div className="flex justify-end gap-2">
+                          <button className={btnGhost} onClick={() => setEditingDesc(false)}>Cancel</button>
+                          <button className={btnPrimary} disabled={patch.isPending} onClick={saveDesc}>{patch.isPending ? "Saving…" : "Save"}</button>
+                        </div>
+                      </div>
+                    ) : t.description ? (
+                      <div className="rounded-2xl bg-slate-50 px-5 py-4"><Markdown source={t.description} /></div>
+                    ) : canEdit ? (
+                      <button onClick={startEdit} className="w-full rounded-2xl border border-dashed border-slate-300 px-5 py-7 text-left text-sm text-slate-400 hover:border-indigo-300 hover:text-indigo-600">Add a description… bullets, checklists and images are supported</button>
+                    ) : <p className="text-sm text-slate-400">No description</p>}
+                  </section>
 
-            <section>
-              <h3 className="mb-2 text-sm font-semibold">Activity</h3>
-              <ul className="space-y-1.5 text-xs text-slate-500">
-                {t.activities.map((a) => <li key={a.id}><b className="text-slate-700">{a.actor.name}</b> {a.message} · {new Date(a.createdAt).toLocaleString()}</li>)}
-              </ul>
-            </section>
-          </div>
-        )}
-        {t && !user && (
-          <button onClick={() => requireAuth()} className="mt-4 w-full rounded-full bg-indigo-50 px-4 py-2.5 text-sm font-medium text-indigo-600 hover:bg-indigo-100">Sign in to edit or comment</button>
+                  <section>
+                    <h3 className="mb-3 text-sm font-semibold">Comments <span className="font-normal text-slate-400">({t.comments.length})</span></h3>
+                    <div className="space-y-3">
+                      {t.comments.map((c) => {
+                        const tone = toneOf(c.author.id);
+                        return (
+                          <div key={c.id} className="flex gap-2.5">
+                            <Avatar user={c.author} />
+                            <div className={clsx("min-w-0 flex-1 rounded-2xl border px-4 py-3", tone.soft, tone.border)}>
+                              <div className="mb-1 text-xs"><b className={tone.text}>{c.author.name}</b> <span className="text-slate-400">· {fmtTime(c.createdAt)}</span></div>
+                              <Markdown source={c.body} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {user ? (
+                      <div className="mt-4 space-y-2">
+                        <RichEditor value={comment} onChange={setComment} rows={3} placeholder="Write a comment… (Ctrl+Enter to send)" onSubmit={send} />
+                        <div className="flex justify-end"><button className={btnPrimary} disabled={!comment.trim() || addComment.isPending} onClick={send}>{addComment.isPending ? "Sending…" : "Comment"}</button></div>
+                      </div>
+                    ) : (
+                      <button onClick={() => requireAuth()} className="mt-4 w-full rounded-full bg-indigo-50 px-4 py-2.5 text-sm font-medium text-indigo-600 hover:bg-indigo-100">Sign in to comment</button>
+                    )}
+                  </section>
+                </div>
+
+                {/* ---------- side column ---------- */}
+                <div className="min-w-0 space-y-5">
+                  <div className="rounded-3xl bg-slate-50 p-5">
+                    <fieldset disabled={!canEdit} className="m-0 min-w-0 space-y-4 border-0 p-0">
+                      <div><Label>Status</Label>
+                        <select className={inputCls + " bg-white"} value={t.status} onChange={(e) => patch.mutate({ status: e.target.value })}>{STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}</select></div>
+                      <div><Label>Priority</Label>
+                        <select className={inputCls + " bg-white"} value={t.priority} onChange={(e) => patch.mutate({ priority: e.target.value })}>{PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>)}</select></div>
+                      <div><Label>Assigned to · {t.assignees.length} {t.assignees.length === 1 ? "person" : "people"}</Label>
+                        <AssigneePicker members={members} value={t.assignees.map((a) => a.id)} disabled={!canEdit} onChange={(ids) => patch.mutate({ assigneeIds: ids })} /></div>
+                      <div><Label>Due date</Label>
+                        <input type="date" className={inputCls + " bg-white"} value={t.dueDate?.slice(0, 10) ?? ""} onChange={(e) => patch.mutate({ dueDate: e.target.value || null })} /></div>
+                    </fieldset>
+                    <dl className="mt-5 space-y-2 border-t border-slate-200 pt-4 text-xs text-slate-500">
+                      <div className="flex justify-between gap-3"><dt>Reported by</dt><dd><b className={toneOf(t.reporter.id).text}>{t.reporter.name}</b></dd></div>
+                      <div className="flex justify-between gap-3"><dt>Created</dt><dd>{fmtTime(t.createdAt)}</dd></div>
+                      <div className="flex justify-between gap-3"><dt>Updated</dt><dd>{fmtTime(t.updatedAt)}</dd></div>
+                    </dl>
+                  </div>
+
+                  <section className="px-1">
+                    <button type="button" onClick={() => setShowActivity((v) => !v)} aria-expanded={showActivity}
+                      className="flex w-full items-center justify-between rounded-xl px-1 py-1 text-sm font-semibold hover:bg-slate-50">
+                      <span>Activity <span className="font-normal text-slate-400">({t.activities.length})</span></span>
+                      <ChevronDown className={clsx("h-4 w-4 text-slate-400 transition-transform duration-200", showActivity && "rotate-180")} />
+                    </button>
+                    {showActivity && (
+                      <ol className="anim-fade ml-2 mt-3 max-h-96 space-y-3.5 overflow-y-auto border-l-2 border-slate-100 pl-5 pr-1">
+                        {t.activities.map((a) => {
+                          const tone = toneOf(a.actor.id);
+                          return (
+                            <li key={a.id} className="relative">
+                              <span className={clsx("absolute -left-[27px] top-1.5 h-2.5 w-2.5 rounded-full ring-4 ring-white", tone.dot)} />
+                              <p className="text-sm leading-snug"><b className={tone.text}>{a.actor.name}</b> <span className="text-slate-600">{a.message}</span></p>
+                              <p className="text-xs text-slate-400">{fmtTime(a.createdAt)}</p>
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    )}
+                  </section>
+                </div>
+              </div>
+            </div>
+          </>
         )}
       </aside>
     </div>

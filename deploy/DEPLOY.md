@@ -13,7 +13,8 @@ ssh deploy@your-server 'cd /var/www/bitcode-tracker && bash deploy/release.sh'
 
 ## Server-only files (never in git)
 `apps/api/.env`: `DATABASE_URL`, `JWT_SECRET`, `PORT=4050`, `NODE_ENV=production`, `WEB_URL=https://tracker.bitcodes.co.in`,
-`RESEND_API_KEY`, `RESEND_FROM`.
+`RESEND_API_KEY`, `RESEND_FROM`, `UPLOAD_DIR=/var/www/bitcode-tracker-data/uploads` (pasted images; deliberately outside the
+deployed folder so `rsync --delete` can never remove them; back this folder up together with the database).
 
 ## Operations
 ```bash

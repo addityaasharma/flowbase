@@ -31,7 +31,7 @@ export const createProjectSchema = z.object({
   description: z.string().max(500).optional(),
 });
 export const createTicketSchema = z.object({
-  projectId: z.string(), title: z.string().min(1), description: z.string().optional(),
+  projectId: z.string(), title: z.string().min(1).max(200), description: z.string().max(20000).optional(),
   type: z.enum(TYPES).default("TASK"), priority: z.enum(PRIORITIES).default("MEDIUM"),
   status: z.enum(STATUSES).default("TODO"), assigneeIds: z.array(z.string()).max(20).default([]),
   labels: z.array(z.string()).default([]), dueDate: z.string().nullable().optional(),
@@ -40,4 +40,4 @@ export const updateTicketSchema = createTicketSchema.omit({ projectId: true }).p
 export const moveTicketSchema = z.object({
   status: z.enum(STATUSES), beforeId: z.string().nullable().optional(), afterId: z.string().nullable().optional(),
 });
-export const commentSchema = z.object({ body: z.string().min(1) });
+export const commentSchema = z.object({ body: z.string().trim().min(1).max(5000) });

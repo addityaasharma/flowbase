@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { TYPE_LABEL } from "@/lib/ui";
 import { AssigneePicker, Modal, btnGhost, btnPrimary, inputCls } from "./Bits";
+import { RichEditor } from "./RichEditor";
 
 export function RaiseTicket({ onClose }: { onClose: () => void }) {
   const { project, members } = useWorkspace();
@@ -28,7 +29,7 @@ export function RaiseTicket({ onClose }: { onClose: () => void }) {
     <Modal title="Raise Ticket" onClose={onClose} wide>
       <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); m.mutate(); }}>
         <input autoFocus className={inputCls} placeholder="Title" value={f.title} onChange={(e) => set("title", e.target.value)} required />
-        <textarea className={inputCls} rows={4} placeholder="Description" value={f.description} onChange={(e) => set("description", e.target.value)} />
+        <RichEditor value={f.description} onChange={(v) => set("description", v)} rows={5} placeholder="Description (optional): use bullets and checklists, or paste an image" />
         <div className="grid grid-cols-2 gap-3">
           <label className="text-xs font-medium text-slate-500">Type{sel("type", TYPES, (v) => TYPE_LABEL[v as keyof typeof TYPE_LABEL])}</label>
           <label className="text-xs font-medium text-slate-500">Priority{sel("priority", PRIORITIES, (v) => PRIORITY_LABEL[v as keyof typeof PRIORITY_LABEL])}</label>

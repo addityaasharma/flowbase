@@ -2,7 +2,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ROLES, type Role } from "@bitcode/shared";
-import { Check, Copy, Mail, UserPlus } from "lucide-react";
+import { Check, Copy, Mail, Trash2, UserPlus } from "lucide-react";
+import { DeleteProjectModal } from "@/components/DeleteProjectModal";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useWorkspace } from "@/lib/workspace";
@@ -88,6 +89,7 @@ export default function Team() {
   const { project, members, myRole, canManage } = useWorkspace();
   const qc = useQueryClient();
   const [inviting, setInviting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const isAdmin = myRole === "ADMIN";
   const refresh = () => qc.invalidateQueries({ queryKey: ["projects"] });
   const setRole = useMutation({
@@ -126,7 +128,14 @@ export default function Team() {
           </div>
         ))}
       </div>
+      {isAdmin && (
+        <section className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-rose-200 bg-rose-50/50 p-5">
+          <div><h3 className="font-semibold text-rose-700">Danger zone</h3><p className="text-sm text-slate-600">Deleting this project permanently removes its tickets, comments and members.</p></div>
+          <button className="inline-flex items-center gap-2 rounded-full border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4" />Delete project</button>
+        </section>
+      )}
       {inviting && <InviteModal onClose={() => setInviting(false)} />}
+      {deleting && <DeleteProjectModal project={project} onClose={() => setDeleting(false)} />}
     </div>
   );
 }

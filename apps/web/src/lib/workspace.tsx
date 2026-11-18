@@ -1,13 +1,15 @@
 "use client";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Role } from "@bitcode/shared";
 import { api } from "./api";
 import { useAuth } from "./auth";
 import type { Project, Ticket, User } from "./types";
+import { assignTones, toneByHash, type Tone } from "./tones";
 
 type Ctx = {
   projects: Project[]; projectsLoaded: boolean; project: Project | undefined; setProjectId: (id: string) => void;
+  toneOf: (userId: string) => Tone; // colour of a person, unique within the open project
   members: User[]; myRole: Role | null; canManage: boolean; // canManage = admin or manager of the current project
   assignee: string; setAssignee: (id: string) => void;
   tickets: Ticket[]; refetchTickets: () => void; openTicket: (id: string | null) => void; openId: string | null;
@@ -18,6 +20,7 @@ const C = createContext<Ctx>(null!);
 
 // the project you are in survives a page refresh (browser-local; falls back to your first project if it is gone)
 const PROJECT_KEY = "flowbase:project";
+const LINK_KEY = "flowbase:openTicket"; // a ?ticket=<id> link from an email, kept until the user is signed in
 const readSavedProject = () => { try { return localStorage.getItem(PROJECT_KEY) ?? ""; } catch { return ""; } };
 export const useWorkspace = () => useContext(C);
 
@@ -30,6 +33,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [newProject, setNewProject] = useState(false);
 
   // queries are per signed-in user: a different account must never see cached data from the previous one
+  // Deep link from an email ("Open task"): remember the ticket, clean the URL, then open it once we know who the user is.
+  useEffect(() => {
+    try {
+      const id = new URLSearchParams(location.search).get("ticket");
+      if (id) { sessionStorage.setItem(LINK_KEY, id); history.replaceState(null, "", location.pathname); }
+    } catch { /* storage blocked: the link just opens the board */ }
+  }, []);
+  useEffect(() => {
+    if (!user) return;
+    let id: string | null = null;
+    try { id = sessionStorage.getItem(LINK_KEY); sessionStorage.removeItem(LINK_KEY); } catch { /* ignore */ }
+    if (!id) return;
+    api<Ticket>(`/tickets/${id}`).then((t) => { setProjectId(t.project.id); openTicket(id); }).catch(() => { /* no access or deleted: stay on the board */ });
+  }, [user]);
+
   const projects = useQuery({ queryKey: ["projects", user?.id], enabled: !!user, queryFn: () => api<Project[]>("/projects") });
   const project = projects.data?.find((p) => p.id === projectId) ?? projects.data?.[0];
   useEffect(() => { if (project && project.id !== projectId) setProjectId(project.id); }, [project, projectId]);
@@ -42,11 +60,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const list = project ? tickets.data ?? [] : [];
   const filtered = list.filter((t) => assignee === "all" ? true : assignee === "unassigned" ? t.assignees.length === 0 : t.assignees.some((a) => a.id === assignee));
   const myRole = project?.myRole ?? null;
+  const tones = useMemo(() => assignTones((project?.members ?? []).map((m) => m.id)), [project]);
+  const toneOf = (id: string) => tones.get(id) ?? toneByHash(id);
 
   return (
     <C.Provider value={{
       projects: projects.data ?? [], projectsLoaded: projects.isSuccess, project, setProjectId: (id) => { setProjectId(id); setAssignee("all"); },
-      members: project?.members ?? [], myRole, canManage: myRole === "ADMIN" || myRole === "MANAGER",
+      toneOf, members: project?.members ?? [], myRole, canManage: myRole === "ADMIN" || myRole === "MANAGER",
       assignee, setAssignee, tickets: filtered, refetchTickets: () => tickets.refetch(), openTicket, openId,
       raise, setRaise, newProject, setNewProject,
     }}>{children}</C.Provider>

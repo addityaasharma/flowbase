@@ -3,14 +3,16 @@ import clsx from "clsx";
 import type { Priority, Status, TicketType } from "@bitcode/shared";
 import { PRIORITY_LABEL, STATUS_LABEL } from "@bitcode/shared";
 import { Bug, CheckSquare, Sparkles, Wrench } from "lucide-react";
-import { PRIORITY_PILL, STATUS_DOT, STATUS_PILL, avatarColor } from "@/lib/ui";
+import { PRIORITY_PILL, STATUS_DOT, STATUS_PILL } from "@/lib/ui";
+import { useWorkspace } from "@/lib/workspace";
 import type { User } from "@/lib/types";
 
 export function Avatar({ user, size = 28 }: { user: Pick<User, "id" | "name"> | null; size?: number }) {
+  const { toneOf } = useWorkspace();
   if (!user) return <span style={{ width: size, height: size }} className="inline-flex items-center justify-center rounded-full border border-dashed border-slate-300 text-xs text-slate-400">?</span>;
   return (
     <span style={{ width: size, height: size, fontSize: size * 0.42 }} title={user.name}
-      className={clsx("inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white ring-2 ring-white shadow-sm", avatarColor(user.id))}>
+      className={clsx("inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white ring-2 ring-white shadow-sm", toneOf(user.id).avatar)}>
       {user.name[0]?.toUpperCase()}
     </span>
   );

@@ -8,7 +8,7 @@ import { useWorkspace } from "./workspace";
 import type { Ticket } from "./types";
 
 export type ToastKind = "moved" | "created" | "comment" | "updated" | "deleted" | "member" | "denied";
-export type Toast = { id: number; kind: ToastKind; actor: string; text: string; ticketId?: string };
+export type Toast = { id: number; kind: ToastKind; actor: { id: string; name: string } | null; text: string; ticketId?: string };
 export type RemoteDrag = { ticketId: string; actorId: string; actorName: string; col?: Status; index?: number; seen: number };
 
 type Ctx = {
@@ -30,7 +30,7 @@ type Ev = {
   type?: string; projectId: string; actor: { id: string; name: string };
   ticket?: { id: string; key: string; title: string; status?: Status; position?: number };
   from?: Status; changes?: string[]; body?: string;
-  ticketId?: string; phase?: "start" | "move" | "end"; col?: Status; index?: number; userId?: string; role?: string;
+  ticketId?: string; phase?: "start" | "move" | "end"; col?: Status; index?: number; userId?: string; role?: string; name?: string;
 };
 
 export function RealtimeProvider({ children }: { children: ReactNode }) {
@@ -45,7 +45,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   const projectKey = projects.map((p) => p.id).sort().join(",");
 
   const dismiss = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
-  const toast = useCallback((kind: ToastKind, actor: string, text: string, ticketId?: string) => {
+  const toast = useCallback((kind: ToastKind, actor: { id: string; name: string } | null, text: string, ticketId?: string) => {
     const id = ++toastSeq;
     setToasts((t) => [...t.slice(-3), { id, kind, actor, text, ticketId }]); // at most 4 on screen
     setTimeout(() => dismiss(id), TOAST_MS);
@@ -78,22 +78,22 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           qc.setQueryData<Ticket[]>(["tickets", e.projectId], (old) => old?.map((x) => (x.id === t.id ? { ...x, status: t.status!, position: t.position! } : x)));
           setRemoteDrags((d) => { if (!d[t.id]) return d; const n = { ...d }; delete n[t.id]; return n; });
           qc.invalidateQueries({ queryKey: ["ticket", t.id] });
-          if (!mine && e.from !== t.status) toast("moved", e.actor.name, `moved ${t.key} “${t.title}” to ${STATUS_LABEL[t.status!]}`, t.id);
+          if (!mine && e.from !== t.status) toast("moved", e.actor, `moved ${t.key} “${t.title}” to ${STATUS_LABEL[t.status!]}`, t.id);
           break;
         case "ticket.created":
-          q(); if (!mine && t) toast("created", e.actor.name, `created ${t.key} “${t.title}”`, t.id); break;
+          q(); if (!mine && t) toast("created", e.actor, `created ${t.key} “${t.title}”`, t.id); break;
         case "ticket.updated":
           q(); if (t) qc.invalidateQueries({ queryKey: ["ticket", t.id] });
-          if (!mine && t) toast("updated", e.actor.name, `${(e.changes ?? []).join(", ")} on ${t.key}`, t.id); break;
+          if (!mine && t) toast("updated", e.actor, `${(e.changes ?? []).join(", ")} on ${t.key}`, t.id); break;
         case "ticket.deleted":
-          q(); if (!mine && t) toast("deleted", e.actor.name, `deleted ${t.key} “${t.title}”`); break;
+          q(); if (!mine && t) toast("deleted", e.actor, `deleted ${t.key} “${t.title}”`); break;
         case "comment.created":
           q(); if (t) qc.invalidateQueries({ queryKey: ["ticket", t.id] });
-          if (!mine && t) toast("comment", e.actor.name, `commented on ${t.key}: “${e.body}”`, t.id); break;
-        case "member.joined": qc.invalidateQueries({ queryKey: ["projects"] }); if (!mine) toast("member", e.actor.name, "joined the project"); break;
-        case "member.role": qc.invalidateQueries({ queryKey: ["projects"] }); if (!mine) toast("member", e.actor.name, `changed a member’s role to ${e.role}`); break;
-        case "member.removed": qc.invalidateQueries({ queryKey: ["projects"] }); if (!mine) toast("member", e.actor.name, e.userId === meRef.current ? "removed you from the project" : "removed a member"); break;
-        case "project.deleted": qc.invalidateQueries({ queryKey: ["projects"] }); if (!mine) toast("deleted", e.actor.name, "deleted the project"); break;
+          if (!mine && t) toast("comment", e.actor, `commented on ${t.key}: “${e.body}”`, t.id); break;
+        case "member.joined": qc.invalidateQueries({ queryKey: ["projects"] }); if (!mine) toast("member", e.actor, "joined the project"); break;
+        case "member.role": qc.invalidateQueries({ queryKey: ["projects"] }); if (!mine) toast("member", e.actor, `changed a member’s role to ${e.role}`); break;
+        case "member.removed": qc.invalidateQueries({ queryKey: ["projects"] }); if (!mine) toast("member", e.actor, e.userId === meRef.current ? "removed you from the project" : "removed a member"); break;
+        case "project.deleted": qc.invalidateQueries({ queryKey: ["projects"] }); if (!mine) toast("deleted", e.actor, e.name ? `deleted the project “${e.name}”` : "deleted the project"); break;
       }
     };
 
@@ -143,7 +143,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     api(`/tickets/${ticketId}/drag`, { method: "POST", json: { phase, col, index } }).catch(() => { /* presence is best-effort */ });
   }, []);
 
-  const notify = useCallback((text: string, kind: ToastKind = "denied") => toast(kind, "", text), [toast]);
+  const notify = useCallback((text: string, kind: ToastKind = "denied") => toast(kind, null, text), [toast]);
 
   return <C.Provider value={{ connected, toasts, dismiss, notify, remoteDrags, sendDrag }}>{children}</C.Provider>;
 }

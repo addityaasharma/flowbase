@@ -14,6 +14,9 @@ app.use("/api", router);
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof ZodError) return res.status(400).json({ error: err.issues.map((i) => i.message).join(", ") });
+  const status = (err as { status?: number })?.status;
+  if (status === 413) return res.status(413).json({ error: "That file is too large (images can be up to 5 MB)" });
+  if (status === 400) return res.status(400).json({ error: "Malformed request" });
   const code = (err as { code?: string })?.code;
   if (code === "P2025") return res.status(404).json({ error: "Not found" });
   if (code === "P2002") return res.status(409).json({ error: "Already exists" });

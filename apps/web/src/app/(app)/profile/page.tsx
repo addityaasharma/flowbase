@@ -2,7 +2,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Check, FolderPlus, LogOut } from "lucide-react";
+import { ArrowRight, Check, FolderPlus, LogOut, Trash2 } from "lucide-react";
+import { DeleteProjectModal } from "@/components/DeleteProjectModal";
+import type { Project } from "@/lib/types";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useWorkspace } from "@/lib/workspace";
@@ -48,6 +50,7 @@ export default function Profile() {
   const [name, setName] = useState(user?.name ?? "");
   const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
   const [error, setError] = useState("");
+  const [toDelete, setToDelete] = useState<Project | null>(null);
   if (!user) return null;
   const dirty = name.trim() !== user.name && name.trim().length > 0;
 
@@ -108,7 +111,10 @@ export default function Profile() {
                 </div>
                 {p.description && <p className="mt-2 line-clamp-2 text-sm text-slate-500">{p.description}</p>}
                 <div className="mt-4 flex items-center justify-between">
-                  {project?.id === p.id ? <span className="text-xs font-medium text-emerald-600">● Currently open</span> : <span />}
+                  <span className="flex items-center gap-3">
+                    {project?.id === p.id && <span className="text-xs font-medium text-emerald-600">● Currently open</span>}
+                    {p.myRole === "ADMIN" && <button className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-rose-600" onClick={() => setToDelete(p)} title="Delete this project (admins only)"><Trash2 className="h-3.5 w-3.5" />Delete</button>}
+                  </span>
                   <button className="flex items-center gap-1 rounded-full bg-indigo-50 px-3.5 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-100"
                     onClick={() => { setProjectId(p.id); router.push("/"); }}>Open board<ArrowRight className="h-3 w-3" /></button>
                 </div>
@@ -117,6 +123,7 @@ export default function Profile() {
           </div>
         </div>
       </section>
+      {toDelete && <DeleteProjectModal project={toDelete} onClose={() => setToDelete(null)} />}
     </div>
   );
 }
