@@ -49,14 +49,9 @@ function Card({ t, onOpen, onAdvance, overlay, canAdvance = true }: { t: Ticket;
   const { user } = useAuth();
   const { toneOf } = useWorkspace();
   const mine = !!user && t.assignees.some((a) => a.id === user.id); // assigned to the person looking at the board
-  const tones = t.assignees.slice(0, 3).map((a) => toneOf(a.id)); // each person's own colour: the card is tinted with the first assignee's
+  const tones = t.assignees.slice(0, 1).map((a) => toneOf(a.id)); // the card is tinted with its (first) assignee's own colour
   return (
     <div className={clsx("relative rounded-[20px] border p-4 transition-shadow duration-200", tones[0] ? `${tones[0].soft} ${tones[0].border}` : "border-transparent bg-white", overlay ? "scale-[1.02] cursor-grabbing shadow-lift" : "shadow-card hover:shadow-lift", mine && "ring-2 ring-indigo-500")}>
-      {tones.length > 0 && (
-        <span aria-hidden className="absolute inset-y-4 left-0 flex w-1.5 flex-col overflow-hidden rounded-r-full" title={t.assignees.map((a) => a.name).join(", ")}>
-          {tones.map((tn, i) => <span key={i} className={clsx("flex-1", tn.dot)} />)}
-        </span>
-      )}
       {mine && <span className="absolute left-4 top-0 z-10 -translate-y-1/2 rounded-full bg-indigo-600 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-card" title="Assigned to you">Assigned to you</span>}
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold text-slate-500"><TypeIcon t={t.type} />{t.key}
