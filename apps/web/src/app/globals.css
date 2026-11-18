@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+
+  /* Apple-style neutrals */
+  --color-slate-50: #f5f5f7;
+  --color-slate-100: #efeff2;
+  --color-slate-200: #e5e5ea;
+  --color-slate-300: #d2d2d7;
+  --color-slate-400: #a1a1a6;
+  --color-slate-500: #86868b;
+  --color-slate-600: #6e6e73;
+  --color-slate-700: #515154;
+  --color-slate-800: #2c2c2e;
+  --color-slate-900: #1d1d1f;
+  /* Apple blue accent (replaces indigo everywhere) */
+  --color-indigo-50: #eef6ff;
+  --color-indigo-100: #dcecff;
+  --color-indigo-200: #b9d9ff;
+  --color-indigo-300: #85bbff;
+  --color-indigo-400: #4a9bff;
+  --color-indigo-500: #1a85ff;
+  --color-indigo-600: #0071e3;
+  --color-indigo-700: #0062c4;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.04);
+  --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.04), 0 12px 32px rgb(0 0 0 / 0.10);
+}
+
+html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+body { background: #f5f5f7; color: #1d1d1f; letter-spacing: -0.011em; font-feature-settings: "cv11", "ss01"; }
+h1, h2, h3 { letter-spacing: -0.022em; }
+::selection { background: #b9d9ff; }
+* { scrollbar-width: thin; scrollbar-color: #d2d2d7 transparent; }
+button, select, input, textarea { font: inherit; }
+button { cursor: pointer; transition: background-color .15s, color .15s, transform .15s, box-shadow .2s, opacity .15s; }
+button:active:not(:disabled) { transform: scale(0.98); }
+.glass { background: rgb(255 255 255 / 0.72); backdrop-filter: saturate(180%) blur(24px); -webkit-backdrop-filter: saturate(180%) blur(24px); }
+@keyframes pop { from { opacity: 0; transform: translateY(-6px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes slide { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+.anim-pop { animation: pop .22s cubic-bezier(.2,.8,.2,1); }
+.anim-slide { animation: slide .28s cubic-bezier(.2,.8,.2,1); }
+.anim-fade { animation: fade .2s ease-out; }
