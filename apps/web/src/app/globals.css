@@ -96,3 +96,5 @@ button:active:not(:disabled) { transform: scale(0.98); }
 :root[data-theme="dark"] input, :root[data-theme="dark"] textarea, :root[data-theme="dark"] select { color: var(--color-slate-900); }
 :root[data-theme="dark"] option { background-color: #232327; color: #f5f5f7; }
 :root[data-theme="dark"] input:-webkit-autofill { -webkit-text-fill-color: #f5f5f7; box-shadow: 0 0 0 100px #2c2c32 inset; }
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

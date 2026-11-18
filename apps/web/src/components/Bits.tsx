@@ -1,4 +1,5 @@
 "use client";
+import { useEffect } from "react";
 import clsx from "clsx";
 import type { Priority, Status, TicketType } from "@bitcode/shared";
 import { PRIORITY_LABEL, STATUS_LABEL } from "@bitcode/shared";
@@ -78,14 +79,19 @@ export const btnPrimary = "inline-flex items-center justify-center gap-2 rounded
 export const btnGhost = "inline-flex items-center justify-center gap-2 rounded-full bg-slate-100 px-5 py-2 text-sm font-medium text-slate-800 hover:bg-slate-200";
 
 export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+  useEffect(() => { // the page behind stays put while a popup is open
+    const prev = document.body.style.overflow; document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/25 p-4 pt-16 backdrop-blur-sm anim-fade" onMouseDown={onClose}>
-      <div className={clsx("anim-pop w-full rounded-[28px] bg-white p-7 shadow-lift", wide ? "max-w-2xl" : "max-w-lg")} onMouseDown={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between">
+    // the popup always fits the screen; only its own content scrolls (no scrollbar shown)
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/25 p-4 backdrop-blur-sm anim-fade" onMouseDown={onClose}>
+      <div className={clsx("anim-pop flex max-h-full w-full flex-col rounded-[28px] bg-white shadow-lift", wide ? "max-w-2xl" : "max-w-lg")} onMouseDown={(e) => e.stopPropagation()}>
+        <div className="flex shrink-0 items-center justify-between px-7 pb-4 pt-7">
           <h2 className="text-xl font-semibold">{title}</h2>
           <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-500 hover:bg-slate-200">✕</button>
         </div>
-        {children}
+        <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-7 pb-7">{children}</div>
       </div>
     </div>
   );
