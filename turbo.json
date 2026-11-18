@@ -25,7 +25,11 @@
       "dependsOn": [
         "^build"
       ],
-      "cache": false
+      "cache": false,
+      "passThroughEnv": [
+        "DATABASE_URL",
+        "JWT_SECRET"
+      ]
     }
   }
 }
