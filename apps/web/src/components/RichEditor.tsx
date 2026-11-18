@@ -117,7 +117,7 @@ export function RichEditor({ value, onChange, placeholder, rows = 4, onSubmit, a
 
   return (
     <div className={clsx("rounded-xl border bg-slate-100 transition focus-within:border-indigo-500 focus-within:bg-white focus-within:ring-4 focus-within:ring-indigo-500/15", drag ? "border-indigo-500" : "border-transparent")}>
-      <div className="flex items-center justify-between gap-2 border-b border-black/5 px-2 py-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-black/5 px-2 py-1.5">
         <div className="flex items-center gap-0.5">
           {tool("Bold (Ctrl+B)", Bold, () => wrap("**", "**", "bold text"))}
           {tool("Italic (Ctrl+I)", Italic, () => wrap("*", "*", "italic text"))}

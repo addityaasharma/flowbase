@@ -35,7 +35,7 @@ Pushes to `main` are built and deployed automatically (see `.github/workflows/de
 
 ## Developer access (Claude Code over MCP)
 
-Link a GitHub repo in **Team & Roles → Project settings**, then create a token in **Profile → Developer access**.
+Set a default GitHub repo in **Team & Roles → Project settings** (admins); anyone working on a task (its assignees and creator) can also attach their own repos to that task (a fork, another repo) from the ticket's **Developer** box, and Claude is told the task's repos first, then the project default. Then create a token in **Profile → Developer access**.
 Connect Claude Code (works with a Claude Pro plan):
 
 ```bash

@@ -44,6 +44,7 @@ model User {
   emailVerifiedAt DateTime?
   authTokens   AuthToken[]
   apiTokens    ApiToken[]
+  ticketRepos  TicketRepo[]
   createdAt    DateTime        @default(now())
   memberships  ProjectMember[]
   assignedTickets TicketAssignee[]
@@ -100,6 +101,8 @@ model Ticket {
   activities  Activity[]
   notifications Notification[]
   reminders   Reminder[]
+  subtasks    Subtask[]
+  repos       TicketRepo[]
 
   @@unique([projectId, number])
   @@index([projectId, status, position])
@@ -232,4 +235,31 @@ model ApiToken {
   createdAt        DateTime  @default(now())
 
   @@index([userId])
+}
+
+/// A checklist item inside a ticket. Whoever may edit the ticket (assignees, creator) may change these.
+model Subtask {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  title     String
+  done      Boolean  @default(false)
+  position  Float    @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, position])
+}
+
+/// A GitHub repo attached to one task by someone working on it. The project may also have a default repo.
+model TicketRepo {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  url       String
+  branch    String?
+  addedById String
+  addedBy   User     @relation(fields: [addedById], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([ticketId, url])
 }

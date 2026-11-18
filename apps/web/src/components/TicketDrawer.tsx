@@ -8,10 +8,42 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useWorkspace } from "@/lib/workspace";
 import { fmtTime } from "@/lib/tones";
-import type { Comment, TicketDetail } from "@/lib/types";
+import type { Comment, SubtaskRow, TicketDetail } from "@/lib/types";
 import { AssigneePicker, Avatar, PriorityPill, StatusPill, TypeIcon, btnGhost, btnPrimary, inputCls } from "./Bits";
 import { Markdown } from "./Markdown";
 import { RichEditor } from "./RichEditor";
+
+/** Checklist inside the ticket, with a progress bar. Only people who can edit the ticket can change it. */
+function Subtasks({ ticketId, items, canEdit, refresh }: { ticketId: string; items: SubtaskRow[]; canEdit: boolean; refresh: () => void }) {
+  const [text, setText] = useState("");
+  const add = useMutation({ mutationFn: (title: string) => api(`/tickets/${ticketId}/subtasks`, { method: "POST", json: { title } }), onSuccess: () => { setText(""); refresh(); } });
+  const toggle = useMutation({ mutationFn: (v: { id: string; done: boolean }) => api(`/subtasks/${v.id}`, { method: "PATCH", json: { done: v.done } }), onSuccess: refresh });
+  const remove = useMutation({ mutationFn: (id: string) => api(`/subtasks/${id}`, { method: "DELETE" }), onSuccess: refresh });
+  const done = items.filter((s) => s.done).length;
+  if (!items.length && !canEdit) return null;
+  return (
+    <section>
+      <div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-semibold">Subtasks {items.length > 0 && <span className="font-normal text-slate-400">({done}/{items.length})</span>}</h3></div>
+      {items.length > 0 && <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{ width: `${(done / items.length) * 100}%` }} /></div>}
+      <ul className="space-y-1">
+        {items.map((s) => (
+          <li key={s.id} className="group flex items-center gap-2.5 rounded-xl px-2 py-1.5 hover:bg-slate-50">
+            <button type="button" disabled={!canEdit} aria-label={s.done ? "Mark as not done" : "Mark as done"} onClick={() => toggle.mutate({ id: s.id, done: !s.done })}
+              className={clsx("flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md border-2 transition", s.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 hover:border-indigo-400", !canEdit && "cursor-default")}>{s.done && <Check className="h-3 w-3" strokeWidth={3} />}</button>
+            <span className={clsx("min-w-0 flex-1 break-words text-sm", s.done && "text-slate-400 line-through")}>{s.title}</span>
+            {canEdit && <button type="button" aria-label="Remove subtask" onClick={() => remove.mutate(s.id)} className="hidden text-slate-300 hover:text-rose-600 group-hover:block"><X className="h-4 w-4" /></button>}
+          </li>
+        ))}
+      </ul>
+      {canEdit && (
+        <form className="mt-2" onSubmit={(e) => { e.preventDefault(); if (text.trim() && !add.isPending) add.mutate(text.trim()); }}>
+          <input value={text} maxLength={200} onChange={(e) => setText(e.target.value)} placeholder="Add a subtask and press Enter" className="w-full rounded-xl bg-slate-100 px-3.5 py-2 text-sm outline-none placeholder:text-slate-400 focus:bg-white focus:ring-4 focus:ring-indigo-500/15" />
+          {add.error && <p className="mt-1 text-xs text-rose-600">{(add.error as Error).message}</p>}
+        </form>
+      )}
+    </section>
+  );
+}
 
 /** Add a label with Enter or comma; click × to remove. */
 function LabelsEditor({ labels, onChange }: { labels: string[]; onChange: (l: string[]) => void }) {
@@ -32,19 +64,52 @@ function LabelsEditor({ labels, onChange }: { labels: string[]; onChange: (l: st
 
 const ViaBadge = ({ name }: { name?: string | null }) => name ? <span title={`Written by an agent using the token “${name}” on this person's behalf`} className="ml-1 inline-flex items-center gap-1 rounded-full bg-violet-50 px-1.5 py-px align-middle text-[10px] font-medium text-violet-700"><Bot className="h-3 w-3" />via {name}</span> : null;
 
-/** Repo link + a suggested branch name to start work from (copy button). */
-function DevBox({ t }: { t: { key: string; title: string; project: { repoUrl?: string | null; repoBranch?: string | null } } }) {
-  const [done, setDone] = useState(false);
-  const branch = `flowbase/${t.key.toLowerCase()}-${t.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)}`.replace(/-$/, "");
-  const repo = t.project.repoUrl;
+/**
+ * Where to work: repos attached to this task by the people working on it, then the project's default repo.
+ * Anyone who can edit the task (assignees, creator) can attach their own repo (a fork, another repo...) and pick which one to use.
+ */
+function DevBox({ t, canEdit, refresh }: { t: TicketDetail; canEdit: boolean; refresh: () => void }) {
+  const [copied, setCopied] = useState("");
+  const [url, setUrl] = useState("");
+  const [branch, setBranch] = useState("");
+  const slug = t.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+  const newBranch = `flowbase/${t.key.toLowerCase()}-${slug}`.replace(/-$/, "");
+  const copy = (id: string, text: string) => { navigator.clipboard?.writeText(text); setCopied(id); setTimeout(() => setCopied(""), 1500); };
+  const add = useMutation({ mutationFn: () => api(`/tickets/${t.id}/repos`, { method: "POST", json: { url, branch } }), onSuccess: () => { setUrl(""); setBranch(""); refresh(); } });
+  const remove = useMutation({ mutationFn: (id: string) => api(`/ticket-repos/${id}`, { method: "DELETE" }), onSuccess: refresh });
+  const repos = [
+    ...t.repos.map((r) => ({ id: r.id, url: r.url, branch: r.branch ?? t.project.repoBranch ?? null, note: `added by ${r.addedBy.name}`, removable: true })),
+    ...(t.project.repoUrl && !t.repos.some((r) => r.url === t.project.repoUrl) ? [{ id: "project", url: t.project.repoUrl, branch: t.project.repoBranch ?? null, note: "project default", removable: false }] : []),
+  ];
+  const clone = (r: { url: string; branch: string | null }) => `git clone ${r.branch ? `-b ${r.branch} ` : ""}${r.url}.git && cd ${r.url.split("/").pop()} && git checkout -b ${newBranch}`;
   return (
     <div className="rounded-3xl bg-slate-50 p-5">
       <Label>Developer</Label>
-      {repo ? <a href={repo} target="_blank" rel="noopener noreferrer" className="mb-2 flex items-center gap-2 truncate text-sm font-medium text-indigo-600 hover:underline"><Github className="h-4 w-4 shrink-0" /><span className="truncate">{repo.replace("https://github.com/", "")}</span></a>
-        : <p className="mb-2 text-xs text-slate-400">No GitHub repo linked yet (a project admin can add one in Team &amp; Roles).</p>}
-      <button type="button" onClick={() => { navigator.clipboard?.writeText(branch); setDone(true); setTimeout(() => setDone(false), 1500); }}
-        className="flex w-full items-center gap-2 rounded-xl bg-white px-3 py-2 text-left font-mono text-xs text-slate-700 ring-1 ring-slate-200 hover:ring-indigo-300" title="Copy branch name">
-        <GitBranch className="h-3.5 w-3.5 shrink-0 text-slate-400" /><span className="min-w-0 flex-1 truncate">{branch}</span>{done ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
+      {repos.length === 0 && <p className="mb-2 text-xs text-slate-400">No GitHub repo yet. {canEdit ? "Attach one below." : "Someone working on this task can attach one."}</p>}
+      <ul className="mb-2 space-y-1.5">
+        {repos.map((r) => (
+          <li key={r.id} className="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-200">
+            <div className="flex items-center gap-2">
+              <a href={r.url} target="_blank" rel="noopener noreferrer" className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium text-indigo-600 hover:underline"><Github className="h-4 w-4 shrink-0" /><span className="truncate">{r.url.replace("https://github.com/", "")}</span></a>
+              <button type="button" title="Copy a command that clones this repo and creates the branch" onClick={() => copy(r.id, clone(r))} className="text-slate-400 hover:text-indigo-600">{copied === r.id ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}</button>
+              {canEdit && r.removable && <button type="button" aria-label="Remove repository" onClick={() => remove.mutate(r.id)} className="text-slate-300 hover:text-rose-600"><X className="h-4 w-4" /></button>}
+            </div>
+            <div className="mt-0.5 text-[11px] text-slate-400">{r.note}{r.branch ? ` · base ${r.branch}` : ""}</div>
+          </li>
+        ))}
+      </ul>
+      {canEdit && (
+        <form className="mb-2 space-y-1.5" onSubmit={(e) => { e.preventDefault(); if (url.trim() && !add.isPending) add.mutate(); }}>
+          <div className="flex gap-1.5">
+            <input value={url} maxLength={200} onChange={(e) => setUrl(e.target.value)} placeholder="Attach a GitHub repo (https://github.com/owner/repo)" className="min-w-0 flex-1 rounded-xl bg-white px-3 py-2 text-xs outline-none ring-1 ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-400" />
+            <input value={branch} maxLength={60} onChange={(e) => setBranch(e.target.value)} placeholder="branch" className="w-20 rounded-xl bg-white px-3 py-2 text-xs outline-none ring-1 ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-400" />
+            <button className="rounded-xl bg-indigo-600 px-3 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50" disabled={!url.trim() || add.isPending}>Add</button>
+          </div>
+          {add.error && <p className="text-xs text-rose-600">{(add.error as Error).message}</p>}
+        </form>
+      )}
+      <button type="button" onClick={() => copy("branch", newBranch)} className="flex w-full items-center gap-2 rounded-xl bg-white px-3 py-2 text-left font-mono text-xs text-slate-700 ring-1 ring-slate-200 hover:ring-indigo-300" title="Copy branch name">
+        <GitBranch className="h-3.5 w-3.5 shrink-0 text-slate-400" /><span className="min-w-0 flex-1 truncate">{newBranch}</span>{copied === "branch" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
       </button>
     </div>
   );
@@ -167,6 +232,8 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                     ) : <p className="text-sm text-slate-400">No description</p>}
                   </section>
 
+                  <Subtasks ticketId={t.id} items={t.subtasks} canEdit={canEdit} refresh={refresh} />
+
                   <section>
                     <h3 className="mb-3 text-sm font-semibold">Comments <span className="font-normal text-slate-400">({t.comments.length})</span></h3>
                     <div className="space-y-4">
@@ -207,7 +274,7 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                     </fieldset>
                   </div>
 
-                  <DevBox t={t} />
+                  <DevBox t={t} canEdit={canEdit} refresh={refresh} />
 
                   <section className="px-1">
                     <button type="button" onClick={() => setShowActivity((v) => !v)} aria-expanded={showActivity}

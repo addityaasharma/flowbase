@@ -51,7 +51,7 @@ export function DeveloperAccess({ onClose }: { onClose: () => void }) {
             <CopyBox label="Command" text={cmd(created.token)} />
             <p className="font-semibold">2 · Then ask Claude</p>
             <CopyBox label="Example prompt" text={prompt} prose />
-            <p className="text-xs text-slate-500">Claude does the work on your machine with your own git access, so it needs the repo link set in <b>Team &amp; Roles → Project settings</b>. Keep the token secret like a password. You can revoke it below at any time.</p>
+            <p className="text-xs text-slate-500">Claude does the work on your machine with your own git access, so it needs a repo: the project default (<b>Team &amp; Roles → Project settings</b>) or one you attach to the task in its <b>Developer</b> box. Keep the token secret like a password. You can revoke it below at any time.</p>
             <button className={btnPrimary} onClick={() => setCreated(null)}>Done</button>
           </div>
         ) : (

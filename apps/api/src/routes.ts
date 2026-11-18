@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { z } from "zod";
 import {
-  loginSchema, registerSchema, forgotSchema, resetSchema, verifySchema, createProjectSchema, updateProjectSchema, createTokenSchema, createTicketSchema, updateTicketSchema, moveTicketSchema,
+  loginSchema, registerSchema, forgotSchema, resetSchema, verifySchema, createProjectSchema, updateProjectSchema, createTokenSchema, ticketRepoSchema, createTicketSchema, updateTicketSchema, moveTicketSchema,
   commentSchema, inviteSchema, acceptInviteSchema, memberRoleSchema, STATUS_LABEL, PRIORITY_LABEL, type Role, type Status,
 } from "@bitcode/shared";
 import type { Prisma } from "@prisma/client";
@@ -473,7 +473,9 @@ router.get("/tickets/:id", wrap(async (req, res) => {
     prisma.comment.findMany({ where: { ticketId: t.id }, include: { author: { select: userSelect } }, orderBy: { createdAt: "asc" } }),
     prisma.activity.findMany({ where: { ticketId: t.id }, include: { actor: { select: userSelect } }, orderBy: { createdAt: "desc" }, take: 30 }),
   ]);
-  res.json({ ...withKey(t), comments, activities });
+  const subtasks = await prisma.subtask.findMany({ where: { ticketId: t.id }, orderBy: [{ position: "asc" }, { createdAt: "asc" }] });
+  const repos = await prisma.ticketRepo.findMany({ where: { ticketId: t.id }, orderBy: { createdAt: "asc" }, select: { id: true, url: true, branch: true, createdAt: true, addedBy: { select: { id: true, name: true } } } });
+  res.json({ ...withKey(t), comments, activities, subtasks, repos });
 }));
 
 router.patch("/tickets/:id", wrap(async (req, res) => {
@@ -539,6 +541,63 @@ router.post("/tickets/:id/drag", wrap(async (req, res) => {
   if (!canEditTicket(t, req.user!.id)) return res.status(403).json(NOT_ALLOWED);
   const d = z.object({ phase: z.enum(["start", "move", "end"]), col: z.enum(STATUSES).optional(), index: z.number().int().min(0).max(1000).optional() }).parse(req.body);
   publish({ type: "drag", projectId: t.projectId, actor: actorOf(req), ticketId: t.id, ...d });
+  res.json({ ok: true });
+}));
+
+// ---------- subtasks (checklist inside a ticket) ----------
+const subtaskTitle = z.string().trim().min(1).max(200);
+async function subtaskTicket(req: Request, res: Response, ticketId: string) {
+  const t = await prisma.ticket.findUnique({ where: { id: ticketId }, include: ticketInclude });
+  if (!t || !(await memberOf(req.user!.id, t.projectId))) { res.status(404).json({ error: "Not found" }); return null; }
+  if (!canEditTicket(t, req.user!.id)) { res.status(403).json(NOT_ALLOWED); return null; }
+  return t;
+}
+const touched = (t: { id: string; projectId: string; title: string; number: number; project: { key: string } }, req: Request, what: string) => {
+  const key = `${t.project.key}-${t.number}`;
+  log(t.id, req.user!.id, what).catch(console.error); // (a Prisma query only runs once something awaits it)
+  publish({ type: "ticket.updated", projectId: t.projectId, actor: actorOf(req), ticket: { id: t.id, key, title: t.title }, changes: [what] });
+};
+router.post("/tickets/:id/subtasks", wrap(async (req, res) => {
+  const t = await subtaskTicket(req, res, req.params.id); if (!t) return;
+  const title = subtaskTitle.parse(req.body?.title);
+  if ((await prisma.subtask.count({ where: { ticketId: t.id } })) >= 50) return res.status(400).json({ error: "A ticket can have up to 50 subtasks" });
+  const last = await prisma.subtask.findFirst({ where: { ticketId: t.id }, orderBy: { position: "desc" }, select: { position: true } });
+  const s = await prisma.subtask.create({ data: { ticketId: t.id, title, position: (last?.position ?? 0) + 1000 } });
+  touched(t, req, `added subtask “${title}”`);
+  res.status(201).json(s);
+}));
+router.patch("/subtasks/:id", wrap(async (req, res) => {
+  const cur = await prisma.subtask.findUnique({ where: { id: req.params.id } }); if (!cur) return res.status(404).json({ error: "Not found" });
+  const t = await subtaskTicket(req, res, cur.ticketId); if (!t) return;
+  const d = z.object({ title: subtaskTitle.optional(), done: z.boolean().optional() }).parse(req.body);
+  const s = await prisma.subtask.update({ where: { id: cur.id }, data: d });
+  if (d.done !== undefined && d.done !== cur.done) touched(t, req, `${d.done ? "completed" : "reopened"} subtask “${s.title}”`);
+  res.json(s);
+}));
+router.delete("/subtasks/:id", wrap(async (req, res) => {
+  const cur = await prisma.subtask.findUnique({ where: { id: req.params.id } }); if (!cur) return res.status(404).json({ error: "Not found" });
+  const t = await subtaskTicket(req, res, cur.ticketId); if (!t) return;
+  await prisma.subtask.delete({ where: { id: cur.id } });
+  touched(t, req, `removed subtask “${cur.title}”`);
+  res.json({ ok: true });
+}));
+
+// ---------- GitHub repos attached to a task (anyone who can edit the task: its assignees and creator) ----------
+router.post("/tickets/:id/repos", wrap(async (req, res) => {
+  const t = await subtaskTicket(req, res, req.params.id); if (!t) return;
+  const d = ticketRepoSchema.parse(req.body);
+  const url = d.url.replace(/\/$/, "").replace(/\.git$/, "");
+  if ((await prisma.ticketRepo.count({ where: { ticketId: t.id } })) >= 5) return res.status(400).json({ error: "A task can have up to 5 repositories" });
+  if (await prisma.ticketRepo.findUnique({ where: { ticketId_url: { ticketId: t.id, url } } })) return res.status(409).json({ error: "That repository is already attached to this task" });
+  const r = await prisma.ticketRepo.create({ data: { ticketId: t.id, url, branch: d.branch ?? null, addedById: req.user!.id } });
+  touched(t, req, `attached repository ${url.replace("https://github.com/", "")}`);
+  res.status(201).json(r);
+}));
+router.delete("/ticket-repos/:id", wrap(async (req, res) => {
+  const cur = await prisma.ticketRepo.findUnique({ where: { id: req.params.id } }); if (!cur) return res.status(404).json({ error: "Not found" });
+  const t = await subtaskTicket(req, res, cur.ticketId); if (!t) return;
+  await prisma.ticketRepo.delete({ where: { id: cur.id } });
+  touched(t, req, `removed repository ${cur.url.replace("https://github.com/", "")}`);
   res.json({ ok: true });
 }));
 

@@ -6,7 +6,7 @@ import {
 } from "@dnd-kit/core";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { ArrowRight, MessageSquare } from "lucide-react";
+import { ArrowRight, CheckSquare, MessageSquare } from "lucide-react";
 import { STATUSES, STATUS_LABEL, type Status } from "@bitcode/shared";
 import { api } from "@/lib/api";
 import { NEXT_ACTION, STATUS_DOT, TYPE_LABEL } from "@/lib/ui";
@@ -61,7 +61,8 @@ function Card({ t, onOpen, onAdvance, overlay, canAdvance = true }: { t: Ticket;
       {t.labels.length > 0 && <div className="mb-3 flex flex-wrap gap-1">{t.labels.map((l) => <span key={l} className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{l}</span>)}</div>}
       <div className={clsx("flex items-center justify-between border-t border-slate-100 pt-3", t.assignees.length > 1 && "flex-wrap gap-y-2")}>
         <span className={clsx("flex items-center gap-2 text-sm", t.assignees.length > 1 ? "shrink-0" : "min-w-0")}><AssigneeStack users={t.assignees} /><span className="truncate" title={t.assignees.map((a) => a.name).join(", ")}>{assigneeLabel(t.assignees)}</span>
-          {t._count.comments > 0 && <span className="flex items-center gap-0.5 text-xs text-slate-400"><MessageSquare className="h-3 w-3" />{t._count.comments}</span>}</span>
+          {t._count.comments > 0 && <span className="flex items-center gap-0.5 text-xs text-slate-400"><MessageSquare className="h-3 w-3" />{t._count.comments}</span>}
+          {t.subtasks.length > 0 && <span className="flex items-center gap-0.5 text-xs text-slate-400" title="Subtasks done"><CheckSquare className="h-3 w-3" />{t.subtasks.filter((s) => s.done).length}/{t.subtasks.length}</span>}</span>
         {next && !overlay && canAdvance && (
           <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onAdvance(next.to)} className={clsx(t.assignees.length > 1 && "ml-auto", "flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-100")}>
             {next.label}<ArrowRight className="h-3 w-3" /></button>
@@ -124,7 +125,7 @@ function Slot({ open, height, ghost }: { open: boolean; height: number; ghost?: 
 function Column({ status, count, children }: { status: Status; count: number; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   return (
-    <section className={clsx("flex h-full min-h-0 flex-col rounded-[28px] p-3 transition-colors duration-200", isOver ? "bg-indigo-100/50" : "bg-slate-200/50")}>
+    <section className={clsx("flex h-full min-h-0 snap-start flex-col rounded-[28px] p-3 transition-colors duration-200", isOver ? "bg-indigo-100/50" : "bg-slate-200/50")}>
       <header className="mb-3 flex shrink-0 items-center justify-between">
         <h2 className="flex items-center gap-2 px-1 text-[13px] font-semibold uppercase tracking-wider text-slate-600">
           <span className={clsx("h-2.5 w-2.5 rounded-full", STATUS_DOT[status])} />{STATUS_LABEL[status].toUpperCase()}</h2>
@@ -245,7 +246,7 @@ export function Board() {
 
   return (
     <DndContext sensors={sensors} collisionDetection={collide} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={onDragCancel}>
-      <div className="grid h-full auto-cols-[minmax(272px,1fr)] grid-flow-col gap-4 overflow-x-auto pb-1">
+      <div className="grid h-full auto-cols-[86%] snap-x snap-mandatory grid-flow-col gap-4 overflow-x-auto pb-1 sm:auto-cols-[minmax(272px,1fr)] sm:snap-none">
         {STATUSES.map((s) => {
           const visible = cols[s].filter((t) => t.id !== activeId);
           const openAt = target?.col === s ? target.index : -1;

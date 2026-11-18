@@ -19,6 +19,10 @@ export const PRIORITY_LABEL: Record<Priority, string> = {
 
 export const loginSchema = z.object({ email: z.string().email(), password: z.string().min(1) });
 const emptyToNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
+const githubUrl = z.string().trim().max(200).regex(/^https:\/\/github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+?(\.git)?\/?$/, "Use a GitHub repository URL like https://github.com/owner/repo");
+const branchName = z.string().trim().max(60).regex(/^[A-Za-z0-9._\/-]+$/, "Branch names can use letters, numbers and . _ - /");
+/** A GitHub repo someone attaches to a task (their fork, a different repo, ...). */
+export const ticketRepoSchema = z.object({ url: githubUrl, branch: z.preprocess(emptyToNull, branchName.nullable().optional()) });
 export const updateProjectSchema = z.object({
   name: z.string().trim().min(1).max(80).optional(), description: z.string().trim().max(500).nullable().optional(),
   repoUrl: z.preprocess(emptyToNull, z.string().trim().max(200).regex(/^https:\/\/github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+?(\.git)?\/?$/, "Use a GitHub repository URL like https://github.com/owner/repo").nullable().optional()),

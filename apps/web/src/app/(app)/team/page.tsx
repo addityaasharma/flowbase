@@ -108,7 +108,7 @@ function ProjectSettings({ project }: { project: { id: string; name: string; des
         <div className="flex items-center gap-3 sm:col-span-2">
           <button className={btnPrimary} disabled={!dirty || save.isPending}>{saved ? <><Check className="h-4 w-4" />Saved</> : save.isPending ? "Saving…" : "Save changes"}</button>
           {save.error && <span className="text-sm text-rose-600">{(save.error as Error).message}</span>}
-          <span className="text-xs text-slate-400">The repo link is shown on tickets and given to Claude/agents so they know where to work.</span>
+          <span className="text-xs text-slate-400">This is the project’s default repo. People working on a task can also attach their own repo to it from the ticket.</span>
         </div>
       </form>
     </section>

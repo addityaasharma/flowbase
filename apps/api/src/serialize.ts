@@ -7,6 +7,7 @@ export const ticketInclude = {
   reporter: { select: userSelect },
   project: { select: { id: true, key: true, name: true, repoUrl: true, repoBranch: true } },
   _count: { select: { comments: true } },
+  subtasks: { select: { done: true } }, // for the "2/5" progress chip on cards
 } as const;
 
 type RawAssignee = { userId: string; user: { id: string; name: string; email: string; title: string | null; active: boolean } };

@@ -63,7 +63,7 @@ export function NotificationBell() {
   return (
     <div ref={box} className="relative">
       <button onClick={() => setOpen((v) => !v)} aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`} aria-expanded={open}
-        className={clsx("relative flex h-10 w-10 items-center justify-center rounded-full transition hover:bg-slate-200/70", open && "bg-slate-200/70")}>
+        className={clsx("relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition hover:bg-slate-200/70 sm:h-10 sm:w-10", open && "bg-slate-200/70")}>
         <Bell className="h-[18px] w-[18px] text-slate-700" />
         {unread > 0 && (
           <span className="absolute right-0.5 top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">{unread > 99 ? "99+" : unread}</span>
@@ -71,7 +71,7 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="bg-white anim-pop absolute right-0 top-[calc(100%+8px)] z-50 flex max-h-[min(72vh,580px)] w-[400px] max-w-[92vw] flex-col overflow-hidden rounded-3xl border border-white/60 shadow-lift">
+        <div className="bg-white anim-pop absolute right-0 top-[calc(100%+8px)] z-50 flex max-h-[min(72vh,580px)] w-[400px] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-3xl border border-white/60 shadow-lift">
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-black/5 px-4 py-3">
             <h2 className="font-semibold">Notifications {unread > 0 && <span className="ml-1 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-600">{unread} new</span>}</h2>
             <button disabled={unread === 0 || markAll.isPending} onClick={() => markAll.mutate()}
