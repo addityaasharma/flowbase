@@ -7,6 +7,7 @@ type Ctx = {
   user: User | null; loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>; logout: () => void;
+  updateName: (name: string) => Promise<void>;
   /** Run `then` now if signed in; otherwise open the sign-in popover and run it after login. */
   requireAuth: (then?: () => void) => boolean;
   signInOpen: boolean; setSignInOpen: (v: boolean) => void;
@@ -36,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     finish(await api<{ token: string; user: User }>("/auth/login", { method: "POST", json: { email, password } }));
   const register = async (name: string, email: string, password: string) =>
     finish(await api<{ token: string; user: User }>("/auth/register", { method: "POST", json: { name, email, password } }));
+  const updateName = async (name: string) => setUser(await api<User>("/auth/me", { method: "PATCH", json: { name } }));
   const logout = () => { tokenStore.clear(); setUser(null); pending.current = null; };
 
   const requireAuth = useCallback((then?: () => void) => {
@@ -45,5 +47,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false;
   }, [user]);
 
-  return <AuthCtx.Provider value={{ user, loading, login, register, logout, requireAuth, signInOpen, setSignInOpen }}>{children}</AuthCtx.Provider>;
+  return <AuthCtx.Provider value={{ user, loading, login, register, logout, updateName, requireAuth, signInOpen, setSignInOpen }}>{children}</AuthCtx.Provider>;
 }

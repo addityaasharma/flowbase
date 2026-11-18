@@ -89,7 +89,10 @@ function Shell({ children }: { children: React.ReactNode }) {
             <button className="inline-flex items-center gap-2 rounded-full bg-slate-200/70 px-4 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-200"
               onClick={() => requireAuth(() => w.setNewProject(true))}><FolderPlus className="h-4 w-4" />New Project</button>
             {user ? (
-              <div className="flex items-center gap-2"><Avatar user={user} size={36} />
+              <div className="flex items-center gap-1.5">
+                <Link href="/profile" title="Your profile" className={clsx("flex items-center gap-2 rounded-full py-1 pl-1 pr-3 text-sm font-medium transition", path === "/profile" ? "bg-white shadow-card" : "hover:bg-slate-200/70")}>
+                  <Avatar user={user} size={32} /><span className="max-w-24 truncate">{user.name.split(" ")[0]}</span>
+                </Link>
                 <button onClick={logout} title="Sign out" className="rounded p-1.5 text-slate-400 hover:bg-slate-100"><LogOut className="h-4 w-4" /></button>
               </div>
             ) : (
@@ -105,7 +108,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           ))}
         </div>}
       </header>
-      <main className="min-h-0 w-full flex-1 overflow-y-auto"><div className="mx-auto h-full max-w-[1600px] px-6 pb-6 pt-5">{loading ? null : empty ? <Welcome /> : children}</div></main>
+      <main className="min-h-0 w-full flex-1 overflow-y-auto"><div className="mx-auto h-full max-w-[1600px] px-6 pb-6 pt-5">{loading ? null : empty && !(user && path === "/profile") ? <Welcome /> : children}</div></main>
       <SignInPopover />
       {w.newProject && <NewProject onClose={() => w.setNewProject(false)} />}
       {w.raise && <RaiseTicket onClose={() => w.setRaise(false)} />}

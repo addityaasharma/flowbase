@@ -91,6 +91,11 @@ router.get("/auth/me", wrap(async (req, res) => {
   res.json(await prisma.user.findUnique({ where: { id: req.user!.id }, select: userSelect }));
 }));
 
+router.patch("/auth/me", wrap(async (req, res) => {
+  const { name } = z.object({ name: z.string().trim().min(1).max(80) }).parse(req.body);
+  res.json(await prisma.user.update({ where: { id: req.user!.id }, data: { name }, select: userSelect }));
+}));
+
 // ---------- projects ----------
 const projectShape = (p: { members: Parameters<typeof flattenMembers>[0] } & Record<string, unknown>, me: string) => {
   const members = flattenMembers(p.members);
