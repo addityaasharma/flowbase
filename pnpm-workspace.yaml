@@ -6,3 +6,5 @@ allowBuilds:
   '@prisma/engines': true
   prisma: true
   esbuild: true
+overrides:
+  postcss: ">=8.5.23"

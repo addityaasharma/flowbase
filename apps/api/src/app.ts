@@ -8,7 +8,13 @@ import { alertError } from "./mail";
 /** The HTTP app, without listening or background jobs, so tests can drive it directly. */
 export const app = express();
 app.set("trust proxy", 1); // behind nginx: real client IP for rate limiting
-app.use(cors({ origin: process.env.WEB_ORIGIN?.split(",") ?? true }));
+app.disable("x-powered-by");
+app.use((_req, res, next) => { // baseline hardening for every API response
+  res.set({ "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer", "Cross-Origin-Resource-Policy": "same-site", "Cache-Control": "no-store" });
+  next();
+});
+// only our own site may call the API from a browser (tokens go in headers, but there is no reason to let other sites try)
+app.use(cors({ origin: process.env.WEB_ORIGIN?.split(",") ?? ["https://tracker.bitcodes.co.in", "http://localhost:3000", "http://127.0.0.1:3000"] }));
 app.use(express.json({ limit: "100kb" }));
 app.get("/health", (_req, res) => res.json({ ok: true }));
 app.get("/api/health", (_req, res) => res.json({ ok: true })); // reachable through nginx for deploy health checks

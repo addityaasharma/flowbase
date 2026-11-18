@@ -147,7 +147,7 @@ const API_TOOL = { name: "flowbase_api", description: "Call the Flowbase REST AP
   inputSchema: { type: "object", properties: { method: { type: "string", enum: ["GET", "POST", "PATCH", "PUT", "DELETE"] }, path: { type: "string", description: "Path after /api, e.g. /tickets or /tickets/ID/comments" }, body: { type: "object", description: "JSON body for POST/PATCH/PUT" } }, required: ["method", "path"] } } as const;
 async function callApi(a: Agent, x: { method: string; path: string; body?: unknown }) {
   if (a.level === "tasks") throw new AgentError(403, "This token only has 'tasks' access. Create a Collaborator or Full access token in Developer access.");
-  if (!/^\/[A-Za-z0-9/_?&=.,%:-]*$/.test(x.path)) throw new AgentError(400, "Invalid path");
+  if (!/^\/[A-Za-z0-9/_?&=,:-]*$/.test(x.path) || x.path.includes("//")) throw new AgentError(400, "Invalid path"); // no dots/percent-escapes: no ../ tricks out of /api
   const r = await fetch(`http://127.0.0.1:${process.env.PORT || 4000}/api${x.path}`, { method: x.method, headers: { Authorization: `Bearer ${a.raw}`, "content-type": "application/json" }, body: x.body !== undefined && x.method !== "GET" ? JSON.stringify(x.body) : undefined });
   const text = await r.text(); let data: unknown; try { data = JSON.parse(text); } catch { data = text; }
   if (!r.ok) throw new AgentError(r.status, `${r.status}: ${typeof data === "object" && data && "error" in data ? String((data as { error: unknown }).error) : text.slice(0, 300)}`);
