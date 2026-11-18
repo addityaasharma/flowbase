@@ -3,14 +3,14 @@ import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { z } from "zod";
 import {
-  loginSchema, registerSchema, createProjectSchema, createTicketSchema, updateTicketSchema, moveTicketSchema,
+  loginSchema, registerSchema, forgotSchema, resetSchema, verifySchema, createProjectSchema, createTicketSchema, updateTicketSchema, moveTicketSchema,
   commentSchema, inviteSchema, acceptInviteSchema, memberRoleSchema, STATUS_LABEL, PRIORITY_LABEL, type Role, type Status,
 } from "@bitcode/shared";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { requireAuth, signToken } from "./auth";
 import { rateLimit } from "./rateLimit";
-import { sendAssignmentEmail, sendInviteEmail } from "./mail";
+import { sendAssignmentEmail, sendInviteEmail, sendPasswordResetEmail, sendVerifyEmail } from "./mail";
 import { grant, openStream, publish, revoke } from "./events";
 import { notify, ticketAudience } from "./notifications";
 import express from "express";
@@ -64,21 +64,81 @@ async function projectAccess(req: Request, res: Response, projectId: string, all
 }
 
 // ================= public: auth + invitation lookup =================
+type UserRow = { id: string; name: string; email: string; title: string | null; active: boolean; emailVerifiedAt: Date | null };
+const publicUser = (u: UserRow) => ({ id: u.id, name: u.name, email: u.email, title: u.title, active: u.active, emailVerified: !!u.emailVerifiedAt });
+
+/** Creates a one-time emailed link (only its hash is stored) and invalidates earlier unused ones of the same kind. */
+async function issueAuthToken(userId: string, kind: "reset" | "verify", ttlMs: number) {
+  const token = crypto.randomBytes(32).toString("hex");
+  await prisma.authToken.updateMany({ where: { userId, kind, usedAt: null }, data: { usedAt: new Date() } });
+  await prisma.authToken.create({ data: { userId, kind, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + ttlMs) } });
+  return token;
+}
+const findAuthToken = (token: string, kind: "reset" | "verify") =>
+  prisma.authToken.findFirst({ where: { tokenHash: hashToken(token), kind, usedAt: null, expiresAt: { gt: new Date() } }, include: { user: true } });
+const sendVerification = async (u: { id: string; name: string; email: string }) => {
+  const token = await issueAuthToken(u.id, "verify", 3 * 864e5);
+  const r = await sendVerifyEmail({ to: u.email, name: u.name, link: `${WEB_URL()}/verify/${token}` });
+  if (!r.sent) console.warn(`[mail] verification email to ${u.email} not sent: ${r.error}`);
+};
+
 router.post("/auth/register", rateLimit("register", 10, 60 * 60_000), wrap(async (req, res) => {
   const d = registerSchema.parse(req.body);
   const email = d.email.toLowerCase();
   if (await prisma.user.findUnique({ where: { email } })) return res.status(409).json({ error: "An account with this email already exists" });
-  const u = await prisma.user.create({ data: { name: d.name, email, passwordHash: await bcrypt.hash(d.password, 10) }, select: userSelect });
-  res.status(201).json({ token: signToken(u.id), user: u });
+  const u = await prisma.user.create({ data: { name: d.name, email, passwordHash: await bcrypt.hash(d.password, 10) } });
+  void sendVerification(u).catch(console.error);
+  res.status(201).json({ token: signToken(u.id, u.tokenVersion), user: publicUser(u) });
 }));
 
 router.post("/auth/login", rateLimit("login", 20, 15 * 60_000), wrap(async (req, res) => {
   const { email, password } = loginSchema.parse(req.body);
   const u = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
   if (!u || !u.active || !(await bcrypt.compare(password, u.passwordHash))) return res.status(401).json({ error: "Invalid email or password" });
-  const { passwordHash, ...user } = u;
-  void passwordHash;
-  res.json({ token: signToken(u.id), user: { id: user.id, name: user.name, email: user.email, title: user.title, active: user.active } });
+  res.json({ token: signToken(u.id, u.tokenVersion), user: publicUser(u) });
+}));
+
+// Always answers the same way, so nobody can use this to find out which emails have accounts.
+router.post("/auth/forgot", rateLimit("forgot", 5, 60 * 60_000), wrap(async (req, res) => {
+  const { email } = forgotSchema.parse(req.body);
+  const u = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+  if (u && u.active) {
+    const recent = await prisma.authToken.count({ where: { userId: u.id, kind: "reset", createdAt: { gt: new Date(Date.now() - 10 * 60_000) } } });
+    if (recent < 2) { // at most two reset emails per 10 minutes per account
+      const token = await issueAuthToken(u.id, "reset", 60 * 60_000);
+      void sendPasswordResetEmail({ to: u.email, name: u.name, link: `${WEB_URL()}/reset/${token}` }).catch(console.error);
+    }
+  }
+  res.json({ ok: true });
+}));
+
+router.get("/auth/reset/:token", wrap(async (req, res) => {
+  const t = await findAuthToken(req.params.token, "reset");
+  if (!t) return res.status(404).json({ error: "This reset link is invalid or has expired" });
+  res.json({ ok: true });
+}));
+
+router.post("/auth/reset", rateLimit("reset", 10, 15 * 60_000), wrap(async (req, res) => {
+  const { token, password } = resetSchema.parse(req.body);
+  const t = await findAuthToken(token, "reset");
+  if (!t) return res.status(400).json({ error: "This reset link is invalid or has expired. Please request a new one." });
+  const u = await prisma.$transaction(async (tx) => {
+    await tx.authToken.update({ where: { id: t.id }, data: { usedAt: new Date() } });
+    // new version = every other device is signed out; being able to read the email also proves the address
+    return tx.user.update({ where: { id: t.userId }, data: { passwordHash: await bcrypt.hash(password, 10), tokenVersion: { increment: 1 }, emailVerifiedAt: t.user.emailVerifiedAt ?? new Date() } });
+  });
+  res.json({ token: signToken(u.id, u.tokenVersion), user: publicUser(u) });
+}));
+
+router.post("/auth/verify", rateLimit("verify", 20, 15 * 60_000), wrap(async (req, res) => {
+  const { token } = verifySchema.parse(req.body);
+  const t = await findAuthToken(token, "verify");
+  if (!t) return res.status(400).json({ error: "This confirmation link is invalid or has expired" });
+  await prisma.$transaction([
+    prisma.authToken.update({ where: { id: t.id }, data: { usedAt: new Date() } }),
+    prisma.user.update({ where: { id: t.userId }, data: { emailVerifiedAt: t.user.emailVerifiedAt ?? new Date() } }),
+  ]);
+  res.json({ ok: true });
 }));
 
 const findPending = (token: string) =>
@@ -105,7 +165,7 @@ router.post("/invitations/accept", rateLimit("accept", 20, 15 * 60_000), wrap(as
   } else {
     if (!name) return res.status(400).json({ error: "Please enter your name" });
     if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters" });
-    user = await prisma.user.create({ data: { name, email: inv.email, passwordHash: await bcrypt.hash(password, 10) } });
+    user = await prisma.user.create({ data: { name, email: inv.email, passwordHash: await bcrypt.hash(password, 10), emailVerifiedAt: new Date() } });
   }
   if (inv.projectId) {
     await prisma.projectMember.upsert({
@@ -113,6 +173,7 @@ router.post("/invitations/accept", rateLimit("accept", 20, 15 * 60_000), wrap(as
       update: {}, create: { projectId: inv.projectId, userId: user.id, role: inv.role },
     });
   }
+  if (!user.emailVerifiedAt) user = await prisma.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } }); // opened the emailed link
   await prisma.invitation.update({ where: { id: inv.id }, data: { acceptedAt: new Date() } });
   if (inv.projectId) {
     const pid = inv.projectId;
@@ -121,7 +182,7 @@ router.post("/invitations/accept", rateLimit("accept", 20, 15 * 60_000), wrap(as
       .then((a) => notify({ userIds: a.map((x) => x.userId), actor: { id: user.id, name: user.name }, kind: "member", text: `joined ${inv.project?.name ?? "the project"}`, projectId: pid }))
       .catch(console.error);
   }
-  res.status(201).json({ token: signToken(user.id), user: { id: user.id, name: user.name, email: user.email, title: user.title, active: user.active } });
+  res.status(201).json({ token: signToken(user.id, user.tokenVersion), user: publicUser(user) });
 }));
 
 // Images are fetched by <img> tags (no auth header), so the file URL itself is the secret: 128 random bits, never listed anywhere.
@@ -131,8 +192,23 @@ router.get("/uploads/:name", serveUpload);
 router.use(requireAuth);
 
 router.get("/auth/me", wrap(async (req, res) => {
-  res.json(await prisma.user.findUnique({ where: { id: req.user!.id }, select: userSelect }));
+  res.json(publicUser((await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id } }))));
 }));
+
+router.post("/auth/resend-verification", rateLimit("resendverify", 3, 60 * 60_000), wrap(async (req, res) => {
+  const u = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id } });
+  if (u.emailVerifiedAt) return res.json({ ok: true, alreadyVerified: true });
+  await sendVerification(u);
+  res.json({ ok: true });
+}));
+
+/** Unverified accounts can browse and work, but can't create projects or invite people (spam/abuse protection). */
+const requireVerified = async (req: Request, res: Response) => {
+  const u = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { emailVerifiedAt: true } });
+  if (u?.emailVerifiedAt) return true;
+  res.status(403).json({ error: "Please confirm your email address first. We sent you a link; use “Resend” if you can't find it.", code: "EMAIL_UNVERIFIED" });
+  return false;
+};
 
 router.get("/events", wrap((req, res) => openStream(req, res)));
 
@@ -148,8 +224,8 @@ router.post("/auth/password", rateLimit("password", 10, 15 * 60_000), wrap(async
   const u = await prisma.user.findUnique({ where: { id: req.user!.id } });
   if (!u || !(await bcrypt.compare(currentPassword, u.passwordHash))) return res.status(400).json({ error: "Current password is incorrect" });
   if (currentPassword === newPassword) return res.status(400).json({ error: "Choose a password you haven't used here" });
-  await prisma.user.update({ where: { id: u.id }, data: { passwordHash: await bcrypt.hash(newPassword, 10) } });
-  res.json({ ok: true });
+  const nu = await prisma.user.update({ where: { id: u.id }, data: { passwordHash: await bcrypt.hash(newPassword, 10), tokenVersion: { increment: 1 } } });
+  res.json({ ok: true, token: signToken(nu.id, nu.tokenVersion) }); // this device stays signed in; all others are signed out
 }));
 
 // ---------- projects ----------
@@ -169,6 +245,7 @@ router.get("/projects", wrap(async (req, res) => {
 }));
 
 router.post("/projects", rateLimit("project", 20, 60 * 60_000), wrap(async (req, res) => {
+  if (!(await requireVerified(req, res))) return;
   const d = createProjectSchema.parse(req.body);
   const p = await prisma.project.create({
     data: { name: d.name, key: d.key, description: d.description, members: { create: { userId: req.user!.id, role: "ADMIN" } } }, // creator = admin
@@ -235,6 +312,7 @@ async function issueInvite(inv: { id: string; email: string; projectId: string |
 }
 
 router.post("/invitations", rateLimit("invite", 30, 60 * 60_000), wrap(async (req, res) => {
+  if (!(await requireVerified(req, res))) return;
   const d = inviteSchema.parse(req.body);
   const me = await projectAccess(req, res, d.projectId, ["ADMIN", "MANAGER"]); if (!me) return;
   if (d.role === "ADMIN" && me.role !== "ADMIN") return res.status(403).json({ error: "Only admins can invite admins" });

@@ -14,6 +14,7 @@ import { Toasts } from "@/components/Toasts";
 import { FlowbaseMark } from "@/components/Logo";
 import { NotificationBell } from "@/components/NotificationBell";
 import { OnlinePill } from "@/components/OnlinePill";
+import { VerifyBanner } from "@/components/VerifyBanner";
 import { RealtimeProvider, useRealtime } from "@/lib/realtime";
 import { STATUSES } from "@bitcode/shared";
 
@@ -62,6 +63,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
+      <VerifyBanner />
       <header className="glass z-40 shrink-0 border-b border-black/5">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-4 px-6 py-3">
           <div className="flex items-center gap-2.5">

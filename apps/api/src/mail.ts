@@ -31,6 +31,16 @@ const shell = (title: string, inner: string, footer: string) => `<div style="fon
 const button = (href: string, label: string) =>
   `<p style="margin:24px 0"><a href="${href}" style="background:#0071e3;color:#fff;padding:12px 24px;border-radius:999px;text-decoration:none;font-weight:600">${label}</a></p>`;
 
+let lastAlert = 0;
+/** Emails ALERT_EMAIL about an unexpected server error (at most one per 10 minutes; only the route, never request data). */
+export async function alertError(where: string, err: unknown) {
+  const to = process.env.ALERT_EMAIL;
+  if (!to || Date.now() - lastAlert < 10 * 60_000) return;
+  lastAlert = Date.now();
+  const msg = err instanceof Error ? `${err.name}: ${err.message}\n${(err.stack ?? "").split("\n").slice(1, 7).join("\n")}` : String(err);
+  await deliver(to, `[Flowbase] server error in ${where}`, `<p>An unexpected error happened on the server.</p><p><b>${esc(where)}</b></p><pre style="font-size:12px;white-space:pre-wrap">${esc(msg)}</pre>`, where);
+}
+
 export function sendInviteEmail(opts: { to: string; link: string; inviter: string; project?: string | null }) {
   const where = opts.project ? ` to join <b>${esc(opts.project)}</b>` : "";
   const html = shell("You're invited to Flowbase",
@@ -38,6 +48,22 @@ export function sendInviteEmail(opts: { to: string; link: string; inviter: strin
      <p style="color:#86868b;font-size:13px">This link expires in 7 days and can be used once. If the button doesn't work, paste this into your browser:<br>${opts.link}</p>`,
     "If you weren't expecting this, you can ignore this email.");
   return deliver(opts.to, "You're invited to Flowbase", html, opts.link);
+}
+
+export function sendPasswordResetEmail(o: { to: string; name: string; link: string }) {
+  const html = shell("Reset your Flowbase password",
+    `<p style="color:#6e6e73;line-height:1.5">Hi ${esc(o.name.split(" ")[0])}, we received a request to reset your password.</p>${button(o.link, "Choose a new password")}
+     <p style="color:#86868b;font-size:13px">This link works once and expires in 1 hour. If the button doesn't work, paste this into your browser:<br>${o.link}</p>`,
+    "If you didn't ask for this, you can ignore this email. Your password won't change.");
+  return deliver(o.to, "Reset your Flowbase password", html, o.link);
+}
+
+export function sendVerifyEmail(o: { to: string; name: string; link: string }) {
+  const html = shell("Confirm your email address",
+    `<p style="color:#6e6e73;line-height:1.5">Welcome to Flowbase, ${esc(o.name.split(" ")[0])}! Please confirm this is your email so you can create projects and invite teammates.</p>${button(o.link, "Confirm email")}
+     <p style="color:#86868b;font-size:13px">This link expires in 3 days. If the button doesn't work, paste this into your browser:<br>${o.link}</p>`,
+    "If you didn't create a Flowbase account, you can ignore this email.");
+  return deliver(o.to, "Confirm your Flowbase email", html, o.link);
 }
 
 export type AssignmentMail = {

@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Check, FolderPlus, LogOut, Trash2 } from "lucide-react";
 import { DeleteProjectModal } from "@/components/DeleteProjectModal";
 import type { Project } from "@/lib/types";
-import { api } from "@/lib/api";
+import { api, tokenStore } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useWorkspace } from "@/lib/workspace";
 import { Avatar, btnGhost, btnPrimary, inputCls } from "@/components/Bits";
@@ -24,7 +24,8 @@ function ChangePassword() {
         e.preventDefault(); if (mismatch) return;
         setState("saving"); setError("");
         try {
-          await api("/auth/password", { method: "POST", json: { currentPassword: cur, newPassword: next } });
+          const r = await api<{ token: string }>("/auth/password", { method: "POST", json: { currentPassword: cur, newPassword: next } });
+          tokenStore.set(r.token); // this device stays signed in; other devices are signed out
           setCur(""); setNext(""); setAgain(""); setState("saved"); setTimeout(() => setState("idle"), 2500);
         } catch (err) { setError((err as Error).message); setState("idle"); }
       }}>
