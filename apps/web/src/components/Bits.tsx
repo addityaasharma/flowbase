@@ -26,7 +26,7 @@ export function AssigneeStack({ users, size = 28 }: { users: Pick<User, "id" | "
     </span>
   );
 }
-export const assigneeLabel = (users: { name: string }[]) => (users.length === 0 ? "Unassigned" : users.length === 1 ? users[0].name : `${users.length} assignees`);
+export const assigneeLabel = (users: { name: string }[]) => (users.length === 0 ? "Unassigned" : users.length === 1 ? users[0].name : `${users.length} people`);
 
 /** Toggle chips for choosing several assignees from the project's members. */
 export function AssigneePicker({ members, value, onChange, disabled }: { members: User[]; value: string[]; onChange: (ids: string[]) => void; disabled?: boolean }) {

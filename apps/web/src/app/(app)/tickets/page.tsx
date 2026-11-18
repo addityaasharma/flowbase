@@ -3,10 +3,12 @@ import { useState } from "react";
 import { PRIORITIES, PRIORITY_LABEL, STATUSES, STATUS_LABEL } from "@bitcode/shared";
 import { Search } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace";
+import { useAuth } from "@/lib/auth";
 import { AssigneeStack, assigneeLabel, PriorityPill, StatusPill, TypeIcon, inputCls } from "@/components/Bits";
 
 export default function AllTickets() {
   const { tickets, openTicket } = useWorkspace();
+  const { user } = useAuth();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [priority, setPriority] = useState("");
@@ -28,7 +30,7 @@ export default function AllTickets() {
           </thead>
           <tbody>
             {rows.map((t) => (
-              <tr key={t.id} className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50" onClick={() => openTicket(t.id)}>
+              <tr key={t.id} className={"cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50" + (t.assignees.some((a) => a.id === user?.id) ? " bg-indigo-50/40 shadow-[inset_3px_0_0_#0071e3]" : "")} onClick={() => openTicket(t.id)}>
                 <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-500"><span className="flex items-center gap-1.5"><TypeIcon t={t.type} />{t.key}</span></td>
                 <td className="px-4 py-3 font-semibold">{t.title}</td>
                 <td className="px-4 py-3"><StatusPill s={t.status} /></td>

@@ -46,20 +46,23 @@ const noop = () => {};
 
 function Card({ t, onOpen, onAdvance, overlay, canAdvance = true }: { t: Ticket; onOpen: () => void; onAdvance: (to: Status) => void; overlay?: boolean; canAdvance?: boolean }) {
   const next = NEXT_ACTION[t.status];
+  const { user } = useAuth();
+  const mine = !!user && t.assignees.some((a) => a.id === user.id); // assigned to the person looking at the board
   return (
-    <div className={clsx("rounded-[20px] bg-white p-4 transition-shadow duration-200", overlay ? "scale-[1.02] cursor-grabbing shadow-lift" : "shadow-card hover:shadow-lift")}>
+    <div className={clsx("rounded-[20px] bg-white p-4 transition-shadow duration-200", overlay ? "scale-[1.02] cursor-grabbing shadow-lift" : "shadow-card hover:shadow-lift", mine && "relative ring-2 ring-indigo-500")}>
+      {mine && <span className="absolute left-4 top-0 z-10 -translate-y-1/2 rounded-full bg-indigo-600 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-card" title="Assigned to you">Assigned to you</span>}
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500"><TypeIcon t={t.type} />{t.key}
+        <span className="flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold text-slate-500"><TypeIcon t={t.type} />{t.key}
           <span className="rounded-full bg-slate-100 px-2 py-0.5 font-normal">{TYPE_LABEL[t.type]}</span></span>
         <PriorityPill p={t.priority} />
       </div>
       <button className="mb-3 w-full text-left text-[15px] font-semibold leading-snug hover:text-indigo-600" onClick={onOpen}>{t.title}</button>
       {t.labels.length > 0 && <div className="mb-3 flex flex-wrap gap-1">{t.labels.map((l) => <span key={l} className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{l}</span>)}</div>}
-      <div className="flex items-center justify-between border-t border-slate-100 pt-3">
-        <span className="flex min-w-0 items-center gap-2 text-sm"><AssigneeStack users={t.assignees} /><span className="truncate" title={t.assignees.map((a) => a.name).join(", ")}>{assigneeLabel(t.assignees)}</span>
+      <div className={clsx("flex items-center justify-between border-t border-slate-100 pt-3", t.assignees.length > 1 && "flex-wrap gap-y-2")}>
+        <span className={clsx("flex items-center gap-2 text-sm", t.assignees.length > 1 ? "shrink-0" : "min-w-0")}><AssigneeStack users={t.assignees} /><span className="truncate" title={t.assignees.map((a) => a.name).join(", ")}>{assigneeLabel(t.assignees)}</span>
           {t._count.comments > 0 && <span className="flex items-center gap-0.5 text-xs text-slate-400"><MessageSquare className="h-3 w-3" />{t._count.comments}</span>}</span>
         {next && !overlay && canAdvance && (
-          <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onAdvance(next.to)} className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-100">
+          <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onAdvance(next.to)} className={clsx(t.assignees.length > 1 && "ml-auto", "flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-100")}>
             {next.label}<ArrowRight className="h-3 w-3" /></button>
         )}
       </div>
@@ -126,7 +129,7 @@ function Column({ status, count, children }: { status: Status; count: number; ch
           <span className={clsx("h-2.5 w-2.5 rounded-full", STATUS_DOT[status])} />{STATUS_LABEL[status].toUpperCase()}</h2>
         <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-slate-600 shadow-card">{count}</span>
       </header>
-      <div ref={setNodeRef} data-col={status} className="-mx-1 min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pt-0.5">{children}</div>
+      <div ref={setNodeRef} data-col={status} className="-mx-1 min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pt-3">{children}</div>
     </section>
   );
 }
