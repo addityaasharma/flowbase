@@ -39,7 +39,7 @@ export function OnlinePill() {
         {onlineIds.length} online
       </button>
       {open && (
-        <div className="glass anim-pop absolute right-0 top-[calc(100%+8px)] z-50 w-72 rounded-3xl border border-white/60 p-3 shadow-lift">
+        <div className="bg-white anim-pop absolute right-0 top-[calc(100%+8px)] z-50 w-72 rounded-3xl border border-white/60 p-3 shadow-lift">
           <div className="px-2 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Online · {online.length}</div>
           <ul className="max-h-60 overflow-y-auto">{online.length ? online.map((m) => row(m, true)) : <li className="px-2 py-2 text-sm text-slate-400">Nobody</li>}</ul>
           {offline.length > 0 && <>

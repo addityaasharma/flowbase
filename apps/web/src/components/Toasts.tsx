@@ -24,7 +24,7 @@ export function Toasts() {
         const { Icon, cls } = ICON[t.kind];
         return (
           <button key={t.id} onClick={() => { dismiss(t.id); if (t.ticketId) openTicket(t.ticketId); }}
-            className="glass anim-toast pointer-events-auto flex items-start gap-3 rounded-2xl border border-white/60 p-3 pr-4 text-left shadow-lift">
+            className="bg-white anim-toast pointer-events-auto flex items-start gap-3 rounded-2xl border border-white/60 p-3 pr-4 text-left shadow-lift">
             <span className={"mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full " + cls}><Icon className="h-4 w-4" /></span>
             <span className="min-w-0 text-sm leading-snug">{t.actor && <b className={"font-semibold " + toneOf(t.actor.id).text}>{t.actor.name} </b>}<span className={t.kind === "denied" ? "text-slate-700" : "text-slate-600"}>{t.text}</span></span>
           </button>

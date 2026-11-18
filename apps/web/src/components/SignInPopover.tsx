@@ -31,7 +31,7 @@ export function SignInPopover() {
   const up = mode === "up";
   return (
     <form
-      className="glass anim-pop fixed right-4 top-4 z-[60] w-80 space-y-3 rounded-3xl border border-white/60 p-5 shadow-lift"
+      className="bg-white anim-pop fixed right-4 top-4 z-[60] w-80 space-y-3 rounded-3xl border border-white/60 p-5 shadow-lift"
       onSubmit={async (e) => {
         e.preventDefault(); setBusy(true); setError("");
         try { await (up ? register(name, email, password) : login(email, password)); setPassword(""); }

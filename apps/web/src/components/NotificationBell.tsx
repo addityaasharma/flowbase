@@ -71,7 +71,7 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="glass anim-pop absolute right-0 top-[calc(100%+8px)] z-50 flex max-h-[min(72vh,580px)] w-[400px] max-w-[92vw] flex-col overflow-hidden rounded-3xl border border-white/60 shadow-lift">
+        <div className="bg-white anim-pop absolute right-0 top-[calc(100%+8px)] z-50 flex max-h-[min(72vh,580px)] w-[400px] max-w-[92vw] flex-col overflow-hidden rounded-3xl border border-white/60 shadow-lift">
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-black/5 px-4 py-3">
             <h2 className="font-semibold">Notifications {unread > 0 && <span className="ml-1 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-600">{unread} new</span>}</h2>
             <button disabled={unread === 0 || markAll.isPending} onClick={() => markAll.mutate()}
