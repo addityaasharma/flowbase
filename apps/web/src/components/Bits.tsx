@@ -15,6 +15,40 @@ export function Avatar({ user, size = 28 }: { user: Pick<User, "id" | "name"> | 
     </span>
   );
 }
+/** Overlapping avatars (max 3) plus a "+N" bubble. */
+export function AssigneeStack({ users, size = 28 }: { users: Pick<User, "id" | "name">[]; size?: number }) {
+  if (!users.length) return <Avatar user={null} size={size} />;
+  const shown = users.slice(0, 3), extra = users.length - shown.length;
+  return (
+    <span className="flex shrink-0 items-center" title={users.map((u) => u.name).join(", ")}>
+      {shown.map((u, i) => <span key={u.id} style={{ marginLeft: i ? -size * 0.3 : 0 }}><Avatar user={u} size={size} /></span>)}
+      {extra > 0 && <span style={{ marginLeft: -size * 0.3, width: size, height: size, fontSize: size * 0.38 }} className="inline-flex items-center justify-center rounded-full bg-slate-200 font-semibold text-slate-600 ring-2 ring-white">+{extra}</span>}
+    </span>
+  );
+}
+export const assigneeLabel = (users: { name: string }[]) => (users.length === 0 ? "Unassigned" : users.length === 1 ? users[0].name : `${users.length} assignees`);
+
+/** Toggle chips for choosing several assignees from the project's members. */
+export function AssigneePicker({ members, value, onChange, disabled }: { members: User[]; value: string[]; onChange: (ids: string[]) => void; disabled?: boolean }) {
+  const toggle = (id: string) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id]);
+  const list = disabled ? members.filter((m) => value.includes(m.id)) : members;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {list.length === 0 && <span className="text-sm font-normal text-slate-400">Nobody is assigned</span>}
+      {list.map((m) => {
+        const on = value.includes(m.id);
+        return (
+          <button type="button" key={m.id} disabled={disabled} onClick={() => toggle(m.id)}
+            className={clsx("flex items-center gap-2 rounded-full border px-2.5 py-1 text-sm font-normal transition disabled:cursor-default",
+              on ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300")}>
+            <Avatar user={m} size={20} />{m.name}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export const PriorityPill = ({ p }: { p: Priority }) => (
   <span className={clsx("rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide", PRIORITY_PILL[p])}>{PRIORITY_LABEL[p]}</span>
 );

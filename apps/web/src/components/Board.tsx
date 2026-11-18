@@ -14,7 +14,7 @@ import type { Ticket } from "@/lib/types";
 import { useWorkspace } from "@/lib/workspace";
 import { useAuth } from "@/lib/auth";
 import { useRealtime } from "@/lib/realtime";
-import { Avatar, PriorityPill, TypeIcon } from "./Bits";
+import { AssigneeStack, PriorityPill, TypeIcon, assigneeLabel } from "./Bits";
 
 type Cols = Record<Status, Ticket[]>;
 const group = (tickets: Ticket[]): Cols => {
@@ -56,7 +56,7 @@ function Card({ t, onOpen, onAdvance, overlay, canAdvance = true }: { t: Ticket;
       <button className="mb-3 w-full text-left text-[15px] font-semibold leading-snug hover:text-indigo-600" onClick={onOpen}>{t.title}</button>
       {t.labels.length > 0 && <div className="mb-3 flex flex-wrap gap-1">{t.labels.map((l) => <span key={l} className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{l}</span>)}</div>}
       <div className="flex items-center justify-between border-t border-slate-100 pt-3">
-        <span className="flex min-w-0 items-center gap-2 text-sm"><Avatar user={t.assignee} /><span className="truncate">{t.assignee?.name ?? "Unassigned"}</span>
+        <span className="flex min-w-0 items-center gap-2 text-sm"><AssigneeStack users={t.assignees} /><span className="truncate" title={t.assignees.map((a) => a.name).join(", ")}>{assigneeLabel(t.assignees)}</span>
           {t._count.comments > 0 && <span className="flex items-center gap-0.5 text-xs text-slate-400"><MessageSquare className="h-3 w-3" />{t._count.comments}</span>}</span>
         {next && !overlay && canAdvance && (
           <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onAdvance(next.to)} className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-100">
@@ -67,13 +67,25 @@ function Card({ t, onOpen, onAdvance, overlay, canAdvance = true }: { t: Ticket;
   );
 }
 
-function DraggableCard({ t, hidden, landing, movable, mover, onOpen, onAdvance }: {
-  t: Ticket; hidden: boolean; landing: boolean; movable: boolean; mover?: string; onOpen: () => void; onAdvance: (to: Status) => void;
+function DraggableCard({ t, hidden, landing, movable, mover, onOpen, onAdvance, onDenied }: {
+  t: Ticket; hidden: boolean; landing: boolean; movable: boolean; mover?: string; onOpen: () => void; onAdvance: (to: Status) => void; onDenied?: () => void;
 }) {
+  const press = useRef<{ x: number; y: number; fired: boolean } | null>(null);
+  // locked card: if the pointer is pressed and dragged a few pixels, tell the user why it will not move
+  const lockedHandlers = movable ? {} : {
+    onPointerDown: (e: React.PointerEvent) => { press.current = { x: e.clientX, y: e.clientY, fired: false }; },
+    onPointerMove: (e: React.PointerEvent) => {
+      const p = press.current;
+      if (!p || p.fired || !(e.buttons & 1)) return;
+      if (Math.hypot(e.clientX - p.x, e.clientY - p.y) > 6) { p.fired = true; onDenied?.(); }
+    },
+    onPointerUp: () => { press.current = null; },
+    onPointerCancel: () => { press.current = null; },
+  };
   // only the assignee or creator may drag; everyone else can open and comment
   const { attributes, listeners, setNodeRef } = useDraggable({ id: t.id, disabled: !movable });
   return (
-    <div ref={setNodeRef} data-card-id={t.id} {...(movable ? { ...attributes, ...listeners } : {})}
+    <div ref={setNodeRef} data-card-id={t.id} {...(movable ? { ...attributes, ...listeners } : lockedHandlers)}
       className={clsx("relative pb-3", movable && "touch-none cursor-grab", hidden && "hidden", landing && "opacity-0")}>
       {mover && <span className="absolute right-4 top-2 z-10 rounded-full bg-indigo-600 px-2.5 py-0.5 text-[11px] font-medium text-white shadow-card">{mover} is moving…</span>}
       <div className={clsx("transition-opacity duration-200", mover && "opacity-45")}><Card t={t} onOpen={onOpen} onAdvance={onAdvance} canAdvance={movable} /></div>
@@ -124,7 +136,15 @@ export function Board() {
   const { user, requireAuth } = useAuth();
   const { remoteDrags, sendDrag } = useRealtime();
   const qc = useQueryClient();
-  const canMove = (t: Ticket) => !!user && (t.reporter.id === user.id || t.assignee?.id === user.id);
+  const canMove = (t: Ticket) => !!user && (t.reporter.id === user.id || t.assignees.some((a) => a.id === user.id));
+  const { notify } = useRealtime();
+  const lastDenied = useRef(0);
+  // someone tried to drag a card that is not theirs: explain why nothing happens
+  const denied = (t: Ticket) => {
+    if (Date.now() - lastDenied.current < 2500) return;
+    lastDenied.current = Date.now();
+    notify(`You can’t move ${t.key}: it isn’t assigned to you. Only its assignees or the person who created it can change it, but you can still comment.`);
+  };
   const targetRef = useRef<{ col: Status; index: number } | null>(null);
   // Local optimistic move: applied in the same render as the drop, so the real card is already in its new slot
   // when the drop animation measures it (the query cache notifies React a tick later).
@@ -149,6 +169,7 @@ export function Board() {
       setOptimistic({ id: v.id, status: v.status, position: v.position });
       mutation.mutate(v, {
         // keep the optimistic card in place until fresh server data has arrived, then drop the override
+        onError: (e: Error) => notify(e.message),
         onSettled: async () => { await qc.invalidateQueries({ queryKey: ["tickets"] }); setOptimistic((o) => (o?.id === v.id ? null : o)); },
       });
     },
@@ -230,7 +251,7 @@ export function Board() {
               {visible.map((t, i) => (
                 <div key={t.id}>
                   <Slot open={openAt === i} height={dragH} ghost={ghosts.find((g) => g.pos === i)} />
-                  <DraggableCard t={t} hidden={false} landing={landingId === t.id} movable={canMove(t)} mover={remoteDrags[t.id]?.actorName} onOpen={() => openTicket(t.id)} onAdvance={(to) => advance(t, to)} />
+                  <DraggableCard t={t} hidden={false} landing={landingId === t.id} movable={canMove(t)} mover={remoteDrags[t.id]?.actorName} onDenied={() => denied(t)} onOpen={() => openTicket(t.id)} onAdvance={(to) => advance(t, to)} />
                 </div>
               ))}
               {/* the dragged card stays mounted (hidden) so dnd-kit keeps its node */}

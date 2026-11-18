@@ -38,7 +38,7 @@ export function SignInPopover() {
         catch (err) { setError((err as Error).message); } finally { setBusy(false); }
       }}>
       <div className="flex items-center justify-between">
-        <div><h2 className="font-semibold">{up ? "Create your account" : "Welcome back"}</h2><p className="text-xs text-slate-500">Bitcode Tracker</p></div>
+        <div><h2 className="font-semibold">{up ? "Create your account" : "Welcome back"}</h2><p className="text-xs text-slate-500">Flowbase</p></div>
         <button type="button" onClick={() => setSignInOpen(false)} className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
       </div>
       <div className="flex gap-0.5 rounded-full bg-slate-200/70 p-1 text-sm font-medium">

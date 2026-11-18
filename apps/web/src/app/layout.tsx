@@ -5,7 +5,7 @@ import { Providers } from "@/components/Providers";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
-export const metadata: Metadata = { title: "Bitcode Tracker", description: "Work tracker for Bitcode Software" };
+export const metadata: Metadata = { title: "Flowbase", description: "Plan, track and ship work with your team" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

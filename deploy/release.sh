@@ -7,8 +7,10 @@ export NODE_OPTIONS=--max-old-space-size=1536 NEXT_PUBLIC_API_URL=/api NEXT_TELE
 PNPM="${PNPM:-npx -y pnpm@10 --config.manage-package-manager-versions=false}"
 nice -n 10 $PNPM install --frozen-lockfile
 $PNPM --filter @bitcode/shared build
-(cd apps/api && $PNPM exec prisma generate && $PNPM exec prisma migrate deploy)
+(cd apps/api && $PNPM exec prisma generate)
 $PNPM --filter @bitcode/api build
 nice -n 10 $PNPM --filter @bitcode/web build
+# migrate only now, right before the restart, so the running API is never on a half-migrated schema during the long build
+(cd apps/api && $PNPM exec prisma migrate deploy)
 pm2 startOrReload ecosystem.config.cjs --update-env
 pm2 save

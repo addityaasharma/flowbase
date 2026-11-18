@@ -5,17 +5,18 @@ import { PRIORITIES, PRIORITY_LABEL, STATUSES, STATUS_LABEL, TYPES } from "@bitc
 import { api } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { TYPE_LABEL } from "@/lib/ui";
-import { Modal, btnGhost, btnPrimary, inputCls } from "./Bits";
+import { AssigneePicker, Modal, btnGhost, btnPrimary, inputCls } from "./Bits";
 
 export function RaiseTicket({ onClose }: { onClose: () => void }) {
   const { project, members } = useWorkspace();
   const qc = useQueryClient();
-  const [f, setF] = useState({ title: "", description: "", type: "TASK", priority: "MEDIUM", status: "TODO", assigneeId: "", dueDate: "", labels: "" });
+  const [f, setF] = useState({ title: "", description: "", type: "TASK", priority: "MEDIUM", status: "TODO", dueDate: "", labels: "" });
+  const [assignees, setAssignees] = useState<string[]>([]);
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
   const m = useMutation({
     mutationFn: () => api("/tickets", { method: "POST", json: {
       projectId: project!.id, title: f.title, description: f.description || undefined, type: f.type, priority: f.priority,
-      status: f.status, assigneeId: f.assigneeId || null, dueDate: f.dueDate || null,
+      status: f.status, assigneeIds: assignees, dueDate: f.dueDate || null,
       labels: f.labels.split(",").map((s) => s.trim()).filter(Boolean),
     } }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tickets"] }); onClose(); },
@@ -32,11 +33,8 @@ export function RaiseTicket({ onClose }: { onClose: () => void }) {
           <label className="text-xs font-medium text-slate-500">Type{sel("type", TYPES, (v) => TYPE_LABEL[v as keyof typeof TYPE_LABEL])}</label>
           <label className="text-xs font-medium text-slate-500">Priority{sel("priority", PRIORITIES, (v) => PRIORITY_LABEL[v as keyof typeof PRIORITY_LABEL])}</label>
           <label className="text-xs font-medium text-slate-500">Status{sel("status", STATUSES, (v) => STATUS_LABEL[v as keyof typeof STATUS_LABEL])}</label>
-          <label className="text-xs font-medium text-slate-500">Assignee
-            <select className={inputCls} value={f.assigneeId} onChange={(e) => set("assigneeId", e.target.value)}>
-              <option value="">Unassigned</option>{members.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
-          </label>
+          <div className="col-span-2 text-xs font-medium text-slate-500"><div className="mb-1">Assignees {assignees.length > 0 && <span className="text-slate-400">· {assignees.length} selected</span>}</div>
+            <AssigneePicker members={members} value={assignees} onChange={setAssignees} /></div>
           <label className="text-xs font-medium text-slate-500">Due date<input type="date" className={inputCls} value={f.dueDate} onChange={(e) => set("dueDate", e.target.value)} /></label>
           <label className="text-xs font-medium text-slate-500">Labels (comma separated)<input className={inputCls} value={f.labels} onChange={(e) => set("labels", e.target.value)} /></label>
         </div>

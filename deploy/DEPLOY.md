@@ -1,4 +1,4 @@
-# Deploying Bitcode Tracker to the VPS
+# Deploying Flowbase to the VPS
 
 Layout: `tracker.bitcodes.co.in` → nginx → web (`127.0.0.1:3050`) and `/api` → API (`127.0.0.1:4050`), both under pm2
 (`tracker-web`, `tracker-api`). Database: Postgres 16 (`bitcode_tracker`, own role). Code: `/var/www/bitcode-tracker`.

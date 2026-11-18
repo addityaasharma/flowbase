@@ -6,6 +6,7 @@ import {
   loginSchema, registerSchema, createProjectSchema, createTicketSchema, updateTicketSchema, moveTicketSchema,
   commentSchema, inviteSchema, acceptInviteSchema, memberRoleSchema, STATUS_LABEL, type Role, type Status,
 } from "@bitcode/shared";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { requireAuth, signToken } from "./auth";
 import { rateLimit } from "./rateLimit";
@@ -25,9 +26,9 @@ const memberOf = (userId: string, projectId: string) =>
   prisma.projectMember.findUnique({ where: { projectId_userId: { projectId, userId } } });
 
 const actorOf = (req: Request) => ({ id: req.user!.id, name: req.user!.name });
-/** Only the assignee or the creator may change/move a ticket; everyone else in the project can read and comment. */
-const canEditTicket = (t: { reporterId: string; assigneeId: string | null }, userId: string) => t.reporterId === userId || t.assigneeId === userId;
-const NOT_ALLOWED = { error: "Only the assignee or the person who created this ticket can change it. You can still comment." };
+/** Only an assignee or the creator may change/move a ticket; everyone else in the project can read and comment. */
+const canEditTicket = (t: { reporterId: string; assignees: { userId: string }[] }, userId: string) => t.reporterId === userId || t.assignees.some((a) => a.userId === userId);
+const NOT_ALLOWED = { error: "Only the assignees or the person who created this ticket can change it. You can still comment." };
 
 /** Resolves the caller's role in a project, or sends 403/404 and returns null. */
 async function projectAccess(req: Request, res: Response, projectId: string, allow?: Role[]) {
@@ -171,7 +172,7 @@ router.delete("/projects/:id/members/:userId", wrap(async (req, res) => {
   if (target.role === "ADMIN" && (await adminCount(req.params.id)) <= 1)
     return res.status(400).json({ error: "You are the only admin. Make someone else admin first, or delete the project." });
   await prisma.$transaction([
-    prisma.ticket.updateMany({ where: { projectId: req.params.id, assigneeId: req.params.userId }, data: { assigneeId: null } }),
+    prisma.ticketAssignee.deleteMany({ where: { userId: req.params.userId, ticket: { projectId: req.params.id } } }),
     prisma.projectMember.delete({ where: { projectId_userId: { projectId: req.params.id, userId: req.params.userId } } }),
   ]);
   publish({ type: "member.removed", projectId: req.params.id, actor: actorOf(req), userId: req.params.userId }); // sent before revoke so the removed user also learns of it
@@ -233,10 +234,12 @@ router.delete("/invitations/:id", wrap(async (req, res) => {
 // ---------- tickets ----------
 const log = (ticketId: string, actorId: string, message: string) => prisma.activity.create({ data: { ticketId, actorId, message } });
 
-async function assigneeOk(res: Response, projectId: string, assigneeId?: string | null) {
-  if (!assigneeId) return true;
-  if (await memberOf(assigneeId, projectId)) return true;
-  res.status(400).json({ error: "Assignee must be a member of this project" });
+async function assigneesOk(res: Response, projectId: string, ids?: string[]) {
+  const unique = [...new Set(ids ?? [])];
+  if (!unique.length) return true;
+  const n = await prisma.projectMember.count({ where: { projectId, userId: { in: unique } } });
+  if (n === unique.length) return true;
+  res.status(400).json({ error: "Assignees must be members of this project" });
   return false;
 }
 
@@ -246,7 +249,7 @@ router.get("/tickets", wrap(async (req, res) => {
     where: {
       project: { members: { some: { userId: req.user!.id } } },
       ...(projectId ? { projectId } : {}),
-      ...(assigneeId === "unassigned" ? { assigneeId: null } : assigneeId ? { assigneeId } : {}),
+      ...(assigneeId === "unassigned" ? { assignees: { none: {} } } : assigneeId ? { assignees: { some: { userId: assigneeId } } } : {}),
       ...(status ? { status: status as Status } : {}),
       ...(q ? { OR: [{ title: { contains: q, mode: "insensitive" } }, { description: { contains: q, mode: "insensitive" } }] } : {}),
     },
@@ -259,7 +262,7 @@ router.get("/tickets", wrap(async (req, res) => {
 router.post("/tickets", rateLimit("ticket", 300, 60 * 60_000), wrap(async (req, res) => {
   const d = createTicketSchema.parse(req.body);
   if (!(await projectAccess(req, res, d.projectId))) return;
-  if (!(await assigneeOk(res, d.projectId, d.assigneeId))) return;
+  if (!(await assigneesOk(res, d.projectId, d.assigneeIds))) return;
   const last = await prisma.ticket.findFirst({ where: { projectId: d.projectId, status: d.status }, orderBy: { position: "desc" }, select: { position: true } });
   const t = await prisma.$transaction(async (tx) => {
     const p = await tx.project.update({ where: { id: d.projectId }, data: { ticketSeq: { increment: 1 } } });
@@ -267,7 +270,7 @@ router.post("/tickets", rateLimit("ticket", 300, 60 * 60_000), wrap(async (req, 
       data: {
         projectId: d.projectId, number: p.ticketSeq, title: d.title, description: d.description,
         type: d.type, priority: d.priority, status: d.status, labels: d.labels,
-        assigneeId: d.assigneeId ?? null, reporterId: req.user!.id,
+        assignees: { create: [...new Set(d.assigneeIds)].map((userId) => ({ userId })) }, reporterId: req.user!.id,
         dueDate: d.dueDate ? new Date(d.dueDate) : null, position: (last?.position ?? 0) + 1000,
       },
       include: ticketInclude,
@@ -298,19 +301,25 @@ router.patch("/tickets/:id", wrap(async (req, res) => {
   const t = await loadTicket(req, res); if (!t) return;
   if (!canEditTicket(t, req.user!.id)) return res.status(403).json(NOT_ALLOWED);
   const d = updateTicketSchema.parse(req.body);
-  if (!(await assigneeOk(res, t.projectId, d.assigneeId))) return;
-  const { dueDate, ...rest } = d;
-  const updated = await prisma.ticket.update({
-    where: { id: t.id },
-    data: { ...rest, ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}) },
-    include: ticketInclude,
-  });
+  if (!(await assigneesOk(res, t.projectId, d.assigneeIds))) return;
+  const { dueDate, assigneeIds, ...rest } = d;
+  const ops: Prisma.PrismaPromise<unknown>[] = [prisma.ticket.update({ where: { id: t.id }, data: { ...rest, ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}) } })];
+  const before = new Set(t.assignees.map((a) => a.userId));
+  const after = new Set(assigneeIds ?? [...before]);
+  const added = [...after].filter((id) => !before.has(id)), removed = [...before].filter((id) => !after.has(id));
+  if (assigneeIds !== undefined && (added.length || removed.length)) {
+    ops.push(prisma.ticketAssignee.deleteMany({ where: { ticketId: t.id, userId: { in: removed } } }));
+    ops.push(prisma.ticketAssignee.createMany({ data: added.map((userId) => ({ ticketId: t.id, userId })) }));
+  }
+  await prisma.$transaction(ops);
+  const updated = await prisma.ticket.findUniqueOrThrow({ where: { id: t.id }, include: ticketInclude });
+  const names = async (ids: string[]) => (await prisma.user.findMany({ where: { id: { in: ids } }, select: { name: true } })).map((u) => u.name).join(", ");
   const changes: string[] = [];
   if (d.title && d.title !== t.title) changes.push("renamed the ticket");
   if (d.priority && d.priority !== t.priority) changes.push(`set priority to ${d.priority.toLowerCase()}`);
   if (d.status && d.status !== t.status) changes.push(`moved to ${STATUS_LABEL[d.status]}`);
-  if (d.assigneeId !== undefined && d.assigneeId !== t.assigneeId)
-    changes.push(updated.assignee ? `assigned to ${updated.assignee.name}` : "unassigned the ticket");
+  if (added.length) changes.push(`assigned ${await names(added)}`);
+  if (removed.length) changes.push(`unassigned ${await names(removed)}`);
   for (const c of changes) await log(t.id, req.user!.id, c);
   const out = withKey(updated);
   if (changes.length) publish({ type: "ticket.updated", projectId: t.projectId, actor: actorOf(req), ticket: { id: t.id, key: out.key, title: updated.title }, changes });

@@ -1,6 +1,6 @@
 "use client";
 import { use, useEffect, useState } from "react";
-import { Sparkles } from "lucide-react";
+import { FlowbaseMark } from "@/components/Logo";
 import { api, tokenStore } from "@/lib/api";
 import { btnPrimary, inputCls } from "@/components/Bits";
 
@@ -21,8 +21,8 @@ export default function AcceptInvite({ params }: { params: Promise<{ token: stri
     <main className="flex min-h-screen items-center justify-center p-4">
       <div className="anim-pop w-full max-w-sm space-y-4 rounded-[28px] bg-white p-8 shadow-lift">
         <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-gradient-to-b from-indigo-400 to-indigo-600 text-white"><Sparkles className="h-5 w-5" /></span>
-          <div><h1 className="text-lg font-semibold">Bitcode Tracker</h1><p className="text-sm text-slate-500">Bitcode Software</p></div>
+          <span className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-slate-100 text-slate-800 ring-1 ring-black/5"><FlowbaseMark className="h-6 w-auto" /></span>
+          <div><h1 className="text-lg font-semibold">Flowbase</h1><p className="text-sm text-slate-500">by Bitcode Software</p></div>
         </div>
         {invalid ? (
           <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-600">{invalid}. Ask whoever invited you to send a new link.</p>

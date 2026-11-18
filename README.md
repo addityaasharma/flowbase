@@ -1,4 +1,6 @@
-# Bitcode Tracker
+<p><img src="apps/web/public/flowbase-mark.svg" alt="Flowbase" width="72"></p>
+
+# Flowbase
 
 An open-source work tracker (boards, tickets, teams) in the spirit of Jira/Linear. Anyone can sign up and create a
 project; the creator becomes that project's **admin** and invites teammates by email. Projects are private to their members.

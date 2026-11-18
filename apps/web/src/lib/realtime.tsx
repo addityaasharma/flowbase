@@ -7,13 +7,15 @@ import { useAuth } from "./auth";
 import { useWorkspace } from "./workspace";
 import type { Ticket } from "./types";
 
-export type ToastKind = "moved" | "created" | "comment" | "updated" | "deleted" | "member";
+export type ToastKind = "moved" | "created" | "comment" | "updated" | "deleted" | "member" | "denied";
 export type Toast = { id: number; kind: ToastKind; actor: string; text: string; ticketId?: string };
 export type RemoteDrag = { ticketId: string; actorId: string; actorName: string; col?: Status; index?: number; seen: number };
 
 type Ctx = {
   connected: boolean;
   toasts: Toast[]; dismiss: (id: number) => void;
+  /** Show a local notification (e.g. "you can't move this card"). */
+  notify: (text: string, kind?: ToastKind) => void;
   remoteDrags: Record<string, RemoteDrag>;
   sendDrag: (ticketId: string, phase: "start" | "move" | "end", col?: Status, index?: number) => void;
 };
@@ -141,5 +143,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     api(`/tickets/${ticketId}/drag`, { method: "POST", json: { phase, col, index } }).catch(() => { /* presence is best-effort */ });
   }, []);
 
-  return <C.Provider value={{ connected, toasts, dismiss, remoteDrags, sendDrag }}>{children}</C.Provider>;
+  const notify = useCallback((text: string, kind: ToastKind = "denied") => toast(kind, "", text), [toast]);
+
+  return <C.Provider value={{ connected, toasts, dismiss, notify, remoteDrags, sendDrag }}>{children}</C.Provider>;
 }

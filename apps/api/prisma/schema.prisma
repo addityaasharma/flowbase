@@ -42,7 +42,7 @@ model User {
   active       Boolean         @default(true)
   createdAt    DateTime        @default(now())
   memberships  ProjectMember[]
-  assigned     Ticket[]        @relation("Assignee")
+  assignedTickets TicketAssignee[]
   reported     Ticket[]        @relation("Reporter")
   comments     Comment[]
   activities   Activity[]
@@ -83,8 +83,7 @@ model Ticket {
   position    Float      @default(0)
   labels      String[]
   dueDate     DateTime?
-  assigneeId  String?
-  assignee    User?      @relation("Assignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assignees   TicketAssignee[]
   reporterId  String
   reporter    User       @relation("Reporter", fields: [reporterId], references: [id])
   createdAt   DateTime   @default(now())
@@ -130,4 +129,15 @@ model Invitation {
   createdAt   DateTime  @default(now())
 
   @@index([email])
+}
+
+model TicketAssignee {
+  ticketId   String
+  userId     String
+  assignedAt DateTime @default(now())
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([ticketId, userId])
+  @@index([userId])
 }

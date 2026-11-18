@@ -11,8 +11,8 @@ export async function sendInviteEmail(opts: { to: string; link: string; inviter:
   }
   const where = opts.project ? ` to join <b>${esc(opts.project)}</b>` : "";
   const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:auto;padding:32px;color:#1d1d1f">
-    <h2 style="margin:0 0 8px;font-size:22px">You're invited to Bitcode Tracker</h2>
-    <p style="color:#6e6e73;line-height:1.5"><b>${esc(opts.inviter)}</b> invited you${where} on the Bitcode Software workspace.</p>
+    <h2 style="margin:0 0 8px;font-size:22px">You're invited to Flowbase</h2>
+    <p style="color:#6e6e73;line-height:1.5"><b>${esc(opts.inviter)}</b> invited you${where} on Flowbase.</p>
     <p style="margin:28px 0"><a href="${opts.link}" style="background:#0071e3;color:#fff;padding:12px 24px;border-radius:999px;text-decoration:none;font-weight:600">Accept invitation</a></p>
     <p style="color:#86868b;font-size:13px">This link expires in 7 days and can be used once. If the button doesn't work, paste this into your browser:<br>${opts.link}</p></div>`;
   try {
@@ -20,8 +20,8 @@ export async function sendInviteEmail(opts: { to: string; link: string; inviter:
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: process.env.RESEND_FROM || "Bitcode Tracker <onboarding@resend.dev>",
-        to: [opts.to], subject: "You're invited to Bitcode Tracker", html,
+        from: process.env.RESEND_FROM || "Flowbase <onboarding@resend.dev>",
+        to: [opts.to], subject: "You're invited to Flowbase", html,
       }),
     });
     if (!res.ok) {

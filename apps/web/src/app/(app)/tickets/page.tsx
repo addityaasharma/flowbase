@@ -3,7 +3,7 @@ import { useState } from "react";
 import { PRIORITIES, PRIORITY_LABEL, STATUSES, STATUS_LABEL } from "@bitcode/shared";
 import { Search } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace";
-import { Avatar, PriorityPill, StatusPill, TypeIcon, inputCls } from "@/components/Bits";
+import { AssigneeStack, assigneeLabel, PriorityPill, StatusPill, TypeIcon, inputCls } from "@/components/Bits";
 
 export default function AllTickets() {
   const { tickets, openTicket } = useWorkspace();
@@ -24,7 +24,7 @@ export default function AllTickets() {
       <div className="overflow-x-auto rounded-[24px] bg-white shadow-card">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-slate-100 text-[11px] uppercase tracking-wider text-slate-500">
-            <tr>{["Key", "Title", "Status", "Priority", "Assignee", "Due", "Updated"].map((h) => <th key={h} className="px-4 py-3 font-semibold">{h}</th>)}</tr>
+            <tr>{["Key", "Title", "Status", "Priority", "Assignees", "Due", "Updated"].map((h) => <th key={h} className="px-4 py-3 font-semibold">{h}</th>)}</tr>
           </thead>
           <tbody>
             {rows.map((t) => (
@@ -33,7 +33,7 @@ export default function AllTickets() {
                 <td className="px-4 py-3 font-semibold">{t.title}</td>
                 <td className="px-4 py-3"><StatusPill s={t.status} /></td>
                 <td className="px-4 py-3"><PriorityPill p={t.priority} /></td>
-                <td className="px-4 py-3"><span className="flex items-center gap-2"><Avatar user={t.assignee} size={24} />{t.assignee?.name ?? "—"}</span></td>
+                <td className="px-4 py-3"><span className="flex items-center gap-2"><AssigneeStack users={t.assignees} size={24} /><span title={t.assignees.map((a) => a.name).join(", ")}>{t.assignees.length ? assigneeLabel(t.assignees) : "—"}</span></span></td>
                 <td className="whitespace-nowrap px-4 py-3 text-slate-500">{t.dueDate ? new Date(t.dueDate).toLocaleDateString() : "—"}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-slate-500">{new Date(t.updatedAt).toLocaleDateString()}</td>
               </tr>

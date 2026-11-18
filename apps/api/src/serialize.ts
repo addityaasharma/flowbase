@@ -3,14 +3,16 @@ import type { Role } from "@bitcode/shared";
 export const userSelect = { id: true, name: true, email: true, title: true, active: true } as const;
 
 export const ticketInclude = {
-  assignee: { select: userSelect },
+  assignees: { select: { userId: true, user: { select: userSelect } }, orderBy: { assignedAt: "asc" as const } },
   reporter: { select: userSelect },
   project: { select: { id: true, key: true, name: true } },
   _count: { select: { comments: true } },
 } as const;
 
-export function withKey<T extends { number: number; project: { key: string } }>(t: T) {
-  return { ...t, key: `${t.project.key}-${t.number}` };
+type RawAssignee = { userId: string; user: { id: string; name: string; email: string; title: string | null; active: boolean } };
+/** Adds the display key (BIT-3) and flattens the assignee join rows into a plain user list. */
+export function withKey<T extends { number: number; project: { key: string }; assignees: RawAssignee[] }>(t: T) {
+  return { ...t, key: `${t.project.key}-${t.number}`, assignees: t.assignees.map((a) => a.user) };
 }
 
 type Member = { role: Role; user: { id: string; name: string; email: string; title: string | null; active: boolean } };

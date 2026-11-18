@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
-import { LayoutGrid, ListChecks, FolderPlus, LogIn, LogOut, Plus, Sparkles, Users } from "lucide-react";
+import { LayoutGrid, ListChecks, FolderPlus, LogIn, LogOut, Plus, Users } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { WorkspaceProvider, useWorkspace } from "@/lib/workspace";
 import { Avatar, btnPrimary } from "@/components/Bits";
@@ -11,6 +11,7 @@ import { RaiseTicket } from "@/components/RaiseTicket";
 import { NewProject } from "@/components/NewProject";
 import { SignInPopover } from "@/components/SignInPopover";
 import { Toasts } from "@/components/Toasts";
+import { FlowbaseMark } from "@/components/Logo";
 import { RealtimeProvider, useRealtime } from "@/lib/realtime";
 import { STATUSES } from "@bitcode/shared";
 
@@ -25,7 +26,7 @@ function Welcome() {
   const w = useWorkspace();
   return (
     <div className="anim-pop mx-auto mt-10 max-w-xl rounded-[32px] bg-white p-10 text-center shadow-card">
-      <span className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-[18px] bg-gradient-to-b from-indigo-400 to-indigo-600 text-white shadow-card"><Sparkles className="h-6 w-6" /></span>
+      <span className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-[18px] bg-slate-100 text-slate-800 shadow-card"><FlowbaseMark className="h-7 w-auto" /></span>
       <h2 className="text-3xl font-semibold tracking-tight">{user ? "Create your first project" : "Plan and track your team’s work"}</h2>
       <p className="mx-auto mt-3 max-w-md text-slate-500">
         {user ? "A project is a workspace for your team’s tickets. You’ll be its admin and can invite teammates by email."
@@ -62,10 +63,10 @@ function Shell({ children }: { children: React.ReactNode }) {
       <header className="glass z-40 shrink-0 border-b border-black/5">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-4 px-6 py-4">
           <div className="flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-gradient-to-b from-indigo-400 to-indigo-600 text-white shadow-card"><Sparkles className="h-5 w-5" /></span>
+            <span className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-slate-100 text-slate-800 shadow-card ring-1 ring-black/5"><FlowbaseMark className="h-6 w-auto" /></span>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-[22px] font-semibold tracking-tight">Bitcode Tracker</h1>
+                <h1 className="text-[22px] font-semibold tracking-tight">Flowbase</h1>
                 {hasProject && (rt.connected
                   ? <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700" title="Updates appear instantly">● Live</span>
                   : <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700" title="Reconnecting…">● Reconnecting…</span>)}

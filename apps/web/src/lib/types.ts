@@ -5,7 +5,7 @@ export type Project = { id: string; name: string; key: string; description: stri
 export type Ticket = {
   id: string; key: string; number: number; title: string; description: string | null;
   type: TicketType; priority: Priority; status: Status; position: number; labels: string[];
-  dueDate: string | null; assignee: User | null; reporter: User; project: { id: string; key: string; name: string };
+  dueDate: string | null; assignees: User[]; reporter: User; project: { id: string; key: string; name: string };
   createdAt: string; updatedAt: string; _count: { comments: number };
 };
 export type Comment = { id: string; body: string; createdAt: string; author: User };

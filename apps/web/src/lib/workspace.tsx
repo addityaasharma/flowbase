@@ -35,7 +35,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     queryFn: () => api<Ticket[]>(`/tickets?projectId=${project!.id}`),
   });
   const list = project ? tickets.data ?? [] : [];
-  const filtered = list.filter((t) => assignee === "all" ? true : assignee === "unassigned" ? !t.assignee : t.assignee?.id === assignee);
+  const filtered = list.filter((t) => assignee === "all" ? true : assignee === "unassigned" ? t.assignees.length === 0 : t.assignees.some((a) => a.id === assignee));
   const myRole = project?.myRole ?? null;
 
   return (

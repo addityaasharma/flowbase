@@ -33,7 +33,7 @@ export const createProjectSchema = z.object({
 export const createTicketSchema = z.object({
   projectId: z.string(), title: z.string().min(1), description: z.string().optional(),
   type: z.enum(TYPES).default("TASK"), priority: z.enum(PRIORITIES).default("MEDIUM"),
-  status: z.enum(STATUSES).default("TODO"), assigneeId: z.string().nullable().optional(),
+  status: z.enum(STATUSES).default("TODO"), assigneeIds: z.array(z.string()).max(20).default([]),
   labels: z.array(z.string()).default([]), dueDate: z.string().nullable().optional(),
 });
 export const updateTicketSchema = createTicketSchema.omit({ projectId: true }).partial();
