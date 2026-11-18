@@ -104,7 +104,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                   ? <span className="rounded-full bg-emerald-50 px-2 py-px text-[10px] font-medium text-emerald-700" title="Updates appear instantly">● Live</span>
                   : <span className="rounded-full bg-amber-50 px-2 py-px text-[10px] font-medium text-amber-700" title="Reconnecting…">● Reconnecting…</span>)}
               </div>
-              {hasProject ? <select className="-ml-1 bg-transparent text-xs leading-tight text-slate-500 outline-none" value={w.project?.id ?? ""} onChange={(e) => w.setProjectId(e.target.value)}>
+              {hasProject ? <select className="-ml-1 bg-transparent text-xs leading-tight text-slate-600 outline-none" value={w.project?.id ?? ""} onChange={(e) => w.setProjectId(e.target.value)}>
                 {w.projects.map((p) => <option key={p.id} value={p.id}>{p.name} • {p.members.length} Members</option>)}
               </select> : <p className="text-xs text-slate-500">Work tracking for teams</p>}
             </div>

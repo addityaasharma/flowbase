@@ -13,7 +13,7 @@ import { rateLimit } from "./rateLimit";
 import { sendAssignmentEmail, sendInviteEmail, sendMentionEmail, sendPasswordResetEmail, sendVerifyEmail } from "./mail";
 import { grant, openStream, publish, revoke } from "./events";
 import { notify, ticketAudience } from "./notifications";
-import { newToken } from "./tokens"; // (routes.ts already has the same sha256 hashToken helper)
+import { currentVia, newToken } from "./tokens"; // (routes.ts already has the same sha256 hashToken helper)
 import express from "express";
 import { MAX_UPLOAD_BYTES, saveUpload, serveUpload } from "./uploads";
 import { STATUSES } from "@bitcode/shared";
@@ -251,7 +251,7 @@ router.post("/auth/password", rateLimit("password", 10, 15 * 60_000), wrap(async
 // ---------- personal access tokens (for Claude / agents) ----------
 const activeToken = () => ({ revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] });
 router.get("/tokens", wrap(async (req, res) => {
-  res.json(await prisma.apiToken.findMany({ where: { userId: req.user!.id, ...activeToken() }, orderBy: { createdAt: "desc" }, select: { id: true, name: true, prefix: true, canCommentOthers: true, expiresAt: true, lastUsedAt: true, createdAt: true } }));
+  res.json(await prisma.apiToken.findMany({ where: { userId: req.user!.id, ...activeToken() }, orderBy: { createdAt: "desc" }, select: { id: true, name: true, prefix: true, canCommentOthers: true, level: true, expiresAt: true, lastUsedAt: true, createdAt: true } }));
 }));
 router.post("/tokens", rateLimit("token", 10, 60 * 60_000), wrap(async (req, res) => {
   if (!(await requireVerified(req, res))) return;
@@ -259,8 +259,8 @@ router.post("/tokens", rateLimit("token", 10, 60 * 60_000), wrap(async (req, res
   if ((await prisma.apiToken.count({ where: { userId: req.user!.id, ...activeToken() } })) >= 10) return res.status(400).json({ error: "You already have 10 active tokens. Revoke one first." });
   const token = newToken();
   const row = await prisma.apiToken.create({
-    data: { userId: req.user!.id, name: d.name, prefix: token.slice(0, 11), tokenHash: hashToken(token), canCommentOthers: d.canCommentOthers, expiresAt: d.expiresInDays ? new Date(Date.now() + d.expiresInDays * 864e5) : null },
-    select: { id: true, name: true, prefix: true, canCommentOthers: true, expiresAt: true, createdAt: true },
+    data: { userId: req.user!.id, name: d.name, prefix: token.slice(0, 11), tokenHash: hashToken(token), canCommentOthers: d.canCommentOthers, level: d.level, expiresAt: d.expiresInDays ? new Date(Date.now() + d.expiresInDays * 864e5) : null },
+    select: { id: true, name: true, prefix: true, canCommentOthers: true, level: true, expiresAt: true, createdAt: true },
   });
   res.status(201).json({ ...row, token }); // the only time the full token is ever shown
 }));
@@ -408,7 +408,7 @@ router.delete("/invitations/:id", wrap(async (req, res) => {
 }));
 
 // ---------- tickets ----------
-export const log = (ticketId: string, actorId: string, message: string, viaAgent?: string) => prisma.activity.create({ data: { ticketId, actorId, message, viaAgent: viaAgent ?? null } });
+export const log = (ticketId: string, actorId: string, message: string, viaAgent?: string) => prisma.activity.create({ data: { ticketId, actorId, message, viaAgent: viaAgent ?? currentVia() ?? null } });
 
 async function assigneesOk(res: Response, projectId: string, ids?: string[]) {
   const unique = [...new Set(ids ?? [])];
@@ -621,8 +621,9 @@ export async function postComment(o: { ticket: { id: string; projectId: string; 
     if (!p) return { ok: false as const, status: 400, error: "The comment you're replying to no longer exists" };
     rootId = p.parentId ?? p.id; replyTo = p;
   }
-  const c = await prisma.comment.create({ data: { ticketId: t.id, authorId: o.user.id, body: o.body, parentId: rootId, viaAgent: o.viaAgent ?? null }, include: { author: { select: userSelect } } });
-  const key = `${t.project.key}-${t.number}`, who = o.user, via = o.viaAgent ? ` (via ${o.viaAgent})` : "", excerpt = plainExcerpt(o.body);
+  const via0 = o.viaAgent ?? currentVia();
+  const c = await prisma.comment.create({ data: { ticketId: t.id, authorId: o.user.id, body: o.body, parentId: rootId, viaAgent: via0 ?? null }, include: { author: { select: userSelect } } });
+  const key = `${t.project.key}-${t.number}`, who = o.user, via = via0 ? ` (via ${via0})` : "", excerpt = plainExcerpt(o.body);
   publish({ type: "comment.created", projectId: t.projectId, actor: who, ticket: { id: t.id, key, title: t.title }, body: excerpt + via, reply: !!rootId });
   const base = { actor: who, projectId: t.projectId, ticketId: t.id, kind: "comment" };
   const mentioned = await notifyMentions({ text: o.body, actor: who, projectId: t.projectId, ticketId: t.id, key, title: t.title }).catch((e) => { console.error(e); return [] as string[]; });

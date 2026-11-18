@@ -151,7 +151,7 @@ export default function Team() {
             </div>
             <div className="flex flex-col items-end gap-1">
               {isAdmin ? (
-                <select className="rounded-md border border-slate-200 px-2 py-1 text-xs" value={u.role} onChange={(e) => setRole.mutate({ id: u.id, role: e.target.value as Role })}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select>
+                <select className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-900" value={u.role} onChange={(e) => setRole.mutate({ id: u.id, role: e.target.value as Role })}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select>
               ) : <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">{u.role}</span>}
               {u.id === user?.id
                 ? <button className="text-xs text-slate-500 hover:text-rose-600" onClick={() => confirm("Leave this project?") && remove.mutate(u.id)}>Leave</button>

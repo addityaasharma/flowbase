@@ -34,7 +34,10 @@ h1, h2, h3 { letter-spacing: -0.022em; }
 ::selection { background: #b9d9ff; }
 * { scrollbar-width: thin; scrollbar-color: #d2d2d7 transparent; }
 /* in the base layer so Tailwind's text-*/font-* utilities on buttons and inputs still win */
-@layer base { button, select, input, textarea { font: inherit; } }
+@layer base {
+  button { font: inherit; color: inherit; }
+  input, select, textarea { font: inherit; color: var(--color-slate-900); } /* explicit: never inherit a label's grey into the field */
+}
 button { cursor: pointer; transition: background-color .15s, color .15s, transform .15s, box-shadow .2s, opacity .15s; }
 button:active:not(:disabled) { transform: scale(0.98); }
 .glass { background: rgb(255 255 255 / 0.72); backdrop-filter: saturate(180%) blur(24px); -webkit-backdrop-filter: saturate(180%) blur(24px); }
@@ -87,3 +90,9 @@ button:active:not(:disabled) { transform: scale(0.98); }
 :root[data-theme="dark"] input::placeholder, :root[data-theme="dark"] textarea::placeholder { color: #77777f; }
 :root[data-theme="dark"] .bg-slate-50 { background-color: #1a1a1e; }
 :root[data-theme="dark"] .hover\:bg-slate-50:hover { background-color: #2a2a2f; }
+/* Focused fields turn "white" in light mode; in dark mode they must stay dark, or light text on white becomes invisible. */
+:root[data-theme="dark"] .focus\:bg-white:focus,
+:root[data-theme="dark"] .focus-within\:bg-white:focus-within { background-color: #2c2c32; }
+:root[data-theme="dark"] input, :root[data-theme="dark"] textarea, :root[data-theme="dark"] select { color: var(--color-slate-900); }
+:root[data-theme="dark"] option { background-color: #232327; color: #f5f5f7; }
+:root[data-theme="dark"] input:-webkit-autofill { -webkit-text-fill-color: #f5f5f7; box-shadow: 0 0 0 100px #2c2c32 inset; }

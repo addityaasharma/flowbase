@@ -1,6 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { prisma } from "./db";
+import { als, resolveToken } from "./tokens";
+import { tokenMayCall } from "./policy";
 
 const SECRET = process.env.JWT_SECRET || "dev-secret";
 if (process.env.NODE_ENV === "production" && SECRET === "dev-secret") throw new Error("JWT_SECRET must be set in production");
@@ -12,6 +14,13 @@ export const signToken = (id: string, version = 0) => jwt.sign({ sub: id, v: ver
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
+    if (req.headers.authorization?.startsWith("Bearer fb_")) { // a personal access token (Claude / agents)
+      const a = await resolveToken(req, res); if (!a) return;
+      if (a.level === "tasks") return res.status(401).json({ error: "Unauthorized" }); // "tasks only" tokens use /api/agent and /api/mcp
+      if (!tokenMayCall(a.level, req.method, req.path)) return res.status(403).json({ error: "This token's access level doesn't allow that action." });
+      req.user = { id: a.user.id, name: a.user.name }; req.agent = a;
+      return als.run({ via: a.tokenName }, () => next()); // everything this request does is marked "via <token>"
+    }
     const h = req.headers.authorization;
     if (!h?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
     const { sub, v } = jwt.verify(h.slice(7), SECRET) as { sub: string; v?: number };

@@ -73,7 +73,7 @@ export function TypeIcon({ t, className = "h-4 w-4" }: { t: TicketType; classNam
   const [Icon, color] = map[t];
   return <Icon className={clsx(className, color)} />;
 }
-export const inputCls = "w-full rounded-xl border border-transparent bg-slate-100 px-3.5 py-2.5 text-sm outline-none transition placeholder:text-slate-400 hover:bg-slate-200/70 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/15 disabled:opacity-60";
+export const inputCls = "w-full rounded-xl border border-transparent bg-slate-100 px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 hover:bg-slate-200/70 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/15 disabled:opacity-60";
 export const btnPrimary = "inline-flex items-center justify-center gap-2 rounded-full bg-indigo-600 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50";
 export const btnGhost = "inline-flex items-center justify-center gap-2 rounded-full bg-slate-100 px-5 py-2 text-sm font-medium text-slate-800 hover:bg-slate-200";
 

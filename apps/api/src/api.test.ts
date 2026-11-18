@@ -179,6 +179,44 @@ describe("agent tokens (Claude / MCP)", () => {
   });
 });
 
+describe("token access levels (collaborator / full)", () => {
+  let collab: string, full: string, aliceFull: string;
+  beforeAll(async () => {
+    collab = (await api().post("/api/tokens").set(auth(bob.token)).send({ name: "Collab", level: "collaborator" })).body.token;
+    full = (await api().post("/api/tokens").set(auth(bob.token)).send({ name: "FullBob", level: "full" })).body.token;
+    aliceFull = (await api().post("/api/tokens").set(auth(alice.token)).send({ name: "FullAlice", level: "full" })).body.token;
+  });
+  it("collaborator reads everything the owner can and raises + assigns tickets to several people", async () => {
+    expect((await api().get("/api/projects").set(auth(collab))).status).toBe(200);
+    const t = await api().post("/api/tickets").set(auth(collab)).send({ projectId, title: "From Claude", assigneeIds: [alice.id, bob.id] });
+    expect(t.status).toBe(201);
+    expect(t.body.assignees.length).toBe(2);
+    const d = (await api().get(`/api/tickets/${t.body.id}`).set(auth(alice.token))).body;
+    await new Promise((r) => setTimeout(r, 150)); const d2 = (await api().get(`/api/tickets/${t.body.id}`).set(auth(alice.token))).body; expect(d2.activities.some((x: any) => x.viaAgent === "Collab")).toBe(true); // marked "via Collab"
+  });
+  it("still bound by the owner's rights: bob's token can't edit a ticket bob can't edit", async () => {
+    expect((await api().patch(`/api/tickets/${mine.id}`).set(auth(collab)).send({ title: "nope" })).status).toBe(403);
+  });
+  it("collaborator cannot delete or manage projects/members; full can only as far as the owner could", async () => {
+    expect((await api().delete(`/api/tickets/${bobs.id}`).set(auth(collab))).status).toBe(403); // level
+    expect((await api().delete(`/api/projects/${projectId}`).set(auth(full))).status).toBe(403); // bob isn't admin
+    const t = (await api().post("/api/tickets").set(auth(aliceFull)).send({ projectId, title: "temp2" })).body;
+    expect((await api().delete(`/api/tickets/${t.id}`).set(auth(aliceFull))).status).toBe(200); // alice is creator
+  });
+  it("no token can touch account security or mint tokens", async () => {
+    for (const tok of [collab, full]) {
+      expect((await api().post("/api/auth/password").set(auth(tok)).send({ currentPassword: "password123", newPassword: "hacked12345" })).status).toBe(403);
+      expect((await api().post("/api/tokens").set(auth(tok)).send({ name: "backdoor", level: "full" })).status).toBe(403);
+      expect((await api().get("/api/tokens").set(auth(tok))).status).toBe(403);
+    }
+    expect((await api().get("/api/auth/me").set(auth(collab))).status).toBe(200);
+  });
+  it("tasks-level tokens still can't use the normal API", async () => {
+    const tasksTok = (await api().post("/api/tokens").set(auth(bob.token)).send({ name: "TasksOnly" })).body.token;
+    expect((await api().get("/api/tickets").set(auth(tasksTok))).status).toBe(401);
+  });
+});
+
 describe("image uploads", () => {
   const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(40)]);
   it("accepts real images, rejects other content (even with an image content-type) and requires login", async () => {

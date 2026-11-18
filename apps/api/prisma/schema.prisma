@@ -229,6 +229,7 @@ model ApiToken {
   prefix           String    // first characters, so the owner can recognise it; the rest is never stored
   tokenHash        String    @unique
   canCommentOthers Boolean   @default(true)  // may read + comment on tasks that are not assigned to the user
+  level            String    @default("tasks") // "tasks" (assigned tasks only) | "collaborator" (acts like a teammate) | "full" (everything the user can do, except account security)
   expiresAt        DateTime?
   lastUsedAt       DateTime?
   revokedAt        DateTime?

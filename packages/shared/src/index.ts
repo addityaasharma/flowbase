@@ -30,6 +30,7 @@ export const updateProjectSchema = z.object({
 });
 export const createTokenSchema = z.object({
   name: z.string().trim().min(1).max(60), expiresInDays: z.union([z.literal(0), z.literal(30), z.literal(90), z.literal(365)]).default(90), canCommentOthers: z.boolean().default(true),
+  level: z.enum(["tasks", "collaborator", "full"]).default("tasks"),
 });
 export const forgotSchema = z.object({ email: z.string().email().max(200) });
 export const resetSchema = z.object({ token: z.string().min(10).max(200), password: z.string().min(8).max(200) });
