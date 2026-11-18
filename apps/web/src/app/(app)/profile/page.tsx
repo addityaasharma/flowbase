@@ -3,9 +3,42 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Check, FolderPlus, LogOut } from "lucide-react";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useWorkspace } from "@/lib/workspace";
 import { Avatar, btnGhost, btnPrimary, inputCls } from "@/components/Bits";
+
+function ChangePassword() {
+  const [cur, setCur] = useState("");
+  const [next, setNext] = useState("");
+  const [again, setAgain] = useState("");
+  const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
+  const [error, setError] = useState("");
+  const mismatch = again.length > 0 && next !== again;
+  return (
+    <section className="rounded-[28px] bg-white p-7 shadow-card">
+      <h3 className="text-xl font-semibold tracking-tight">Change password</h3>
+      <form className="mt-4 grid gap-3 sm:grid-cols-3" onSubmit={async (e) => {
+        e.preventDefault(); if (mismatch) return;
+        setState("saving"); setError("");
+        try {
+          await api("/auth/password", { method: "POST", json: { currentPassword: cur, newPassword: next } });
+          setCur(""); setNext(""); setAgain(""); setState("saved"); setTimeout(() => setState("idle"), 2500);
+        } catch (err) { setError((err as Error).message); setState("idle"); }
+      }}>
+        <input className={inputCls} type="password" placeholder="Current password" autoComplete="current-password" value={cur} onChange={(e) => setCur(e.target.value)} required />
+        <input className={inputCls} type="password" placeholder="New password (min 8)" autoComplete="new-password" minLength={8} value={next} onChange={(e) => setNext(e.target.value)} required />
+        <input className={inputCls} type="password" placeholder="Repeat new password" autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} required />
+        <div className="flex items-center gap-3 sm:col-span-3">
+          <button className={btnPrimary} disabled={state === "saving" || mismatch}>
+            {state === "saved" ? <><Check className="h-4 w-4" />Password updated</> : state === "saving" ? "Updating…" : "Update password"}</button>
+          {mismatch && <span className="text-sm text-rose-600">Passwords don’t match</span>}
+          {error && <span className="text-sm text-rose-600">{error}</span>}
+        </div>
+      </form>
+    </section>
+  );
+}
 
 export default function Profile() {
   const { user, updateName, logout } = useAuth();
@@ -48,6 +81,8 @@ export default function Profile() {
         </form>
         {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
       </section>
+
+      <ChangePassword />
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">

@@ -15,6 +15,11 @@ export function SignInPopover() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // every time the popover closes, go back to a clean "Sign in" form (never reopen on a stale "Sign up" tab)
+  useEffect(() => {
+    if (!signInOpen) { setMode("in"); setName(""); setEmail(""); setPassword(""); setError(""); }
+  }, [signInOpen]);
+
   useEffect(() => {
     if (!signInOpen) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setSignInOpen(false);

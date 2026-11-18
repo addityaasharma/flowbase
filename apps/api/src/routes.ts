@@ -96,6 +96,15 @@ router.patch("/auth/me", wrap(async (req, res) => {
   res.json(await prisma.user.update({ where: { id: req.user!.id }, data: { name }, select: userSelect }));
 }));
 
+router.post("/auth/password", rateLimit("password", 10, 15 * 60_000), wrap(async (req, res) => {
+  const { currentPassword, newPassword } = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(8).max(200) }).parse(req.body);
+  const u = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!u || !(await bcrypt.compare(currentPassword, u.passwordHash))) return res.status(400).json({ error: "Current password is incorrect" });
+  if (currentPassword === newPassword) return res.status(400).json({ error: "Choose a password you haven't used here" });
+  await prisma.user.update({ where: { id: u.id }, data: { passwordHash: await bcrypt.hash(newPassword, 10) } });
+  res.json({ ok: true });
+}));
+
 // ---------- projects ----------
 const projectShape = (p: { members: Parameters<typeof flattenMembers>[0] } & Record<string, unknown>, me: string) => {
   const members = flattenMembers(p.members);
