@@ -3,12 +3,12 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { PRIORITIES, PRIORITY_LABEL, STATUSES, STATUS_LABEL } from "@bitcode/shared";
-import { ChevronDown, Lock, Pencil, Trash2, X } from "lucide-react";
+import { ChevronDown, CornerDownRight, Lock, Pencil, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useWorkspace } from "@/lib/workspace";
 import { fmtTime } from "@/lib/tones";
-import type { TicketDetail } from "@/lib/types";
+import type { Comment, TicketDetail } from "@/lib/types";
 import { AssigneePicker, Avatar, PriorityPill, StatusPill, TypeIcon, btnGhost, btnPrimary, inputCls } from "./Bits";
 import { Markdown } from "./Markdown";
 import { RichEditor } from "./RichEditor";
@@ -24,6 +24,8 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
   const [showActivity, setShowActivity] = useState(false);
   const [editingDesc, setEditingDesc] = useState(false);
   const [descDraft, setDescDraft] = useState("");
+  const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
+  const [replyText, setReplyText] = useState("");
   const q = useQuery({ queryKey: ["ticket", id], queryFn: () => api<TicketDetail>(`/tickets/${id}`), refetchInterval: 30000 }); // live updates arrive over the event stream; this is a safety net
   const refresh = () => { qc.invalidateQueries({ queryKey: ["ticket", id] }); qc.invalidateQueries({ queryKey: ["tickets"] }); };
   const patch = useMutation({ mutationFn: (json: object) => api(`/tickets/${id}`, { method: "PATCH", json }), onSuccess: refresh });
@@ -31,15 +33,48 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
     mutationFn: () => api(`/tickets/${id}/comments`, { method: "POST", json: { body: comment } }),
     onSuccess: () => { setComment(""); refresh(); },
   });
+  const reply = useMutation({
+    mutationFn: (v: { parentId: string; body: string }) => api(`/tickets/${id}/comments`, { method: "POST", json: v }),
+    onSuccess: () => { setReplyTo(null); setReplyText(""); refresh(); },
+  });
   const del = useMutation({ mutationFn: () => api(`/tickets/${id}`, { method: "DELETE" }), onSuccess: () => { qc.invalidateQueries({ queryKey: ["tickets"] }); openTicket(null); } });
-  useEffect(() => { setEditingDesc(false); setShowActivity(false); setComment(""); }, [id]);
+  useEffect(() => { setEditingDesc(false); setShowActivity(false); setComment(""); setReplyTo(null); setReplyText(""); }, [id]);
 
   const t = q.data;
   const canDelete = !!user && !!t && t.reporter.id === user.id;                                                   // only the creator can delete
   const canEdit = !!user && !!t && (t.reporter.id === user.id || t.assignees.some((a) => a.id === user.id));     // an assignee or the creator; others can comment
+  const sendReply = () => { if (replyTo && replyText.trim() && !reply.isPending) reply.mutate({ parentId: replyTo.id, body: replyText }); };
+  const startReply = (c: Comment, isReply: boolean) => { setReplyTo({ id: c.id, name: c.author.name }); setReplyText(isReply ? `@${c.author.name} ` : ""); };
   const send = () => { if (comment.trim() && !addComment.isPending) addComment.mutate(); };
   const startEdit = () => { setDescDraft(t?.description ?? ""); setEditingDesc(true); };
   const saveDesc = () => patch.mutate({ description: descDraft }, { onSuccess: () => setEditingDesc(false) });
+
+  const renderComment = (c: Comment, isReply: boolean) => {
+    const tone = toneOf(c.author.id);
+    return (
+      <div key={c.id} className="flex gap-2.5">
+        <Avatar user={c.author} size={isReply ? 24 : 28} />
+        <div className="min-w-0 flex-1">
+          <div className={clsx("rounded-2xl border px-4 py-3", tone.soft, tone.border)}>
+            <div className="mb-1 text-xs"><b className={tone.text}>{c.author.name}</b> <span className="text-slate-400">· {fmtTime(c.createdAt)}</span></div>
+            <Markdown source={c.body} />
+          </div>
+          {user && replyTo?.id !== c.id && (
+            <button onClick={() => startReply(c, isReply)} className="ml-2 mt-1 flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-indigo-600"><CornerDownRight className="h-3 w-3" />Reply</button>
+          )}
+          {replyTo?.id === c.id && (
+            <div className="mt-2 space-y-2">
+              <RichEditor value={replyText} onChange={setReplyText} rows={2} autoFocus placeholder={`Reply to ${c.author.name}… (Ctrl+Enter to send)`} onSubmit={sendReply} />
+              <div className="flex justify-end gap-2">
+                <button className={btnGhost + " !px-4 !py-1.5"} onClick={() => setReplyTo(null)}>Cancel</button>
+                <button className={btnPrimary + " !px-4 !py-1.5"} disabled={!replyText.trim() || reply.isPending} onClick={sendReply}>{reply.isPending ? "Sending…" : "Reply"}</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="anim-fade fixed inset-0 z-50 flex justify-end bg-black/25 backdrop-blur-sm" onMouseDown={onClose}>
@@ -97,16 +132,13 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
 
                   <section>
                     <h3 className="mb-3 text-sm font-semibold">Comments <span className="font-normal text-slate-400">({t.comments.length})</span></h3>
-                    <div className="space-y-3">
-                      {t.comments.map((c) => {
-                        const tone = toneOf(c.author.id);
+                    <div className="space-y-4">
+                      {t.comments.filter((c) => !c.parentId).map((c) => {
+                        const replies = t.comments.filter((r) => r.parentId === c.id);
                         return (
-                          <div key={c.id} className="flex gap-2.5">
-                            <Avatar user={c.author} />
-                            <div className={clsx("min-w-0 flex-1 rounded-2xl border px-4 py-3", tone.soft, tone.border)}>
-                              <div className="mb-1 text-xs"><b className={tone.text}>{c.author.name}</b> <span className="text-slate-400">· {fmtTime(c.createdAt)}</span></div>
-                              <Markdown source={c.body} />
-                            </div>
+                          <div key={c.id}>
+                            {renderComment(c, false)}
+                            {replies.length > 0 && <div className="ml-9 mt-2 space-y-2 border-l-2 border-slate-100 pl-4">{replies.map((r) => renderComment(r, true))}</div>}
                           </div>
                         );
                       })}

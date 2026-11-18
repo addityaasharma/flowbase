@@ -8,6 +8,7 @@ export type Ticket = {
   dueDate: string | null; assignees: User[]; reporter: User; project: { id: string; key: string; name: string };
   createdAt: string; updatedAt: string; _count: { comments: number };
 };
-export type Comment = { id: string; body: string; createdAt: string; author: User };
+export type Comment = { id: string; body: string; createdAt: string; author: User; parentId: string | null };
+export type AppNotification = { id: string; kind: string; text: string; actorId: string | null; actorName: string | null; projectId: string | null; ticketId: string | null; createdAt: string; readAt: string | null };
 export type Activity = { id: string; message: string; createdAt: string; actor: User };
 export type TicketDetail = Ticket & { comments: Comment[]; activities: Activity[] };

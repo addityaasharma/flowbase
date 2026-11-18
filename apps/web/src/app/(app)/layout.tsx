@@ -12,6 +12,8 @@ import { NewProject } from "@/components/NewProject";
 import { SignInPopover } from "@/components/SignInPopover";
 import { Toasts } from "@/components/Toasts";
 import { FlowbaseMark } from "@/components/Logo";
+import { NotificationBell } from "@/components/NotificationBell";
+import { OnlinePill } from "@/components/OnlinePill";
 import { RealtimeProvider, useRealtime } from "@/lib/realtime";
 import { STATUSES } from "@bitcode/shared";
 
@@ -94,6 +96,8 @@ function Shell({ children }: { children: React.ReactNode }) {
             <button className={btnPrimary + " py-2.5 shadow-card"} onClick={() => requireAuth(() => w.setRaise(true))}><Plus className="h-4 w-4" />Raise Ticket</button></>}
             <button className="inline-flex items-center gap-2 rounded-full bg-slate-200/70 px-4 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-200"
               onClick={() => requireAuth(() => w.setNewProject(true))}><FolderPlus className="h-4 w-4" />New Project</button>
+            {hasProject && <OnlinePill />}
+            <NotificationBell />
             {user ? (
               <div className="flex items-center gap-1.5">
                 <Link href="/profile" title="Your profile" className={clsx("flex items-center gap-2 rounded-full py-1 pl-1 pr-3 text-sm font-medium transition", path === "/profile" ? "bg-white shadow-card" : "hover:bg-slate-200/70")}>

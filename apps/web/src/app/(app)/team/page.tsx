@@ -7,6 +7,7 @@ import { DeleteProjectModal } from "@/components/DeleteProjectModal";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useWorkspace } from "@/lib/workspace";
+import { useRealtime } from "@/lib/realtime";
 import { Avatar, Modal, btnGhost, btnPrimary, inputCls } from "@/components/Bits";
 
 type InviteResult = { id: string; email: string; link: string; emailSent: boolean; emailError?: string };
@@ -87,6 +88,7 @@ function PendingInvites({ projectId }: { projectId: string }) {
 export default function Team() {
   const { user } = useAuth();
   const { project, members, myRole, canManage } = useWorkspace();
+  const { isOnline } = useRealtime();
   const qc = useQueryClient();
   const [inviting, setInviting] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -112,7 +114,7 @@ export default function Team() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {members.map((u) => (
           <div key={u.id} className="flex items-center gap-4 rounded-[24px] bg-white p-5 shadow-card transition hover:shadow-lift">
-            <Avatar user={u} size={48} />
+            <span className="relative shrink-0"><Avatar user={u} size={48} />{isOnline(u.id) && <span title="Online" className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500" />}</span>
             <div className="min-w-0 flex-1">
               <div className="truncate font-bold">{u.name}{u.id === user?.id && <span className="ml-1.5 text-xs font-normal text-slate-400">(you)</span>}</div>
               <div className="truncate text-sm text-slate-500">{u.email}</div>

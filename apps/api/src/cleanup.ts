@@ -44,9 +44,15 @@ export async function cleanupUploads(): Promise<{ removed: number; bytes: number
   return { removed, bytes };
 }
 
+/** Inbox housekeeping: read entries are kept 30 days, anything at most 90 days. */
+export async function cleanupNotifications() {
+  const d = (days: number) => new Date(Date.now() - days * 86400_000);
+  return prisma.notification.deleteMany({ where: { OR: [{ readAt: { lt: d(30) } }, { createdAt: { lt: d(90) } }] } });
+}
+
 /** Runs shortly after start-up and then every 6 hours. */
 export function startUploadCleanup() {
-  const run = () => cleanupUploads()
+  const run = () => cleanupNotifications().then(() => cleanupUploads())
     .then((r) => { if (r.removed) console.log(`[uploads] cleanup removed ${r.removed} unused image(s), freed ${(r.bytes / 1048576).toFixed(1)} MB`); })
     .catch((e) => console.error("[uploads] cleanup failed", e));
   setTimeout(run, 60_000).unref();

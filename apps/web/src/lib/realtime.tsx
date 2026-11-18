@@ -7,7 +7,7 @@ import { useAuth } from "./auth";
 import { useWorkspace } from "./workspace";
 import type { Ticket } from "./types";
 
-export type ToastKind = "moved" | "created" | "comment" | "updated" | "deleted" | "member" | "denied";
+export type ToastKind = "moved" | "created" | "comment" | "updated" | "deleted" | "member" | "denied" | "assigned";
 export type Toast = { id: number; kind: ToastKind; actor: { id: string; name: string } | null; text: string; ticketId?: string };
 export type RemoteDrag = { ticketId: string; actorId: string; actorName: string; col?: Status; index?: number; seen: number };
 
@@ -17,6 +17,8 @@ type Ctx = {
   /** Show a local notification (e.g. "you can't move this card"). */
   notify: (text: string, kind?: ToastKind) => void;
   remoteDrags: Record<string, RemoteDrag>;
+  /** People with the app open right now, in the current project. */
+  onlineIds: string[]; isOnline: (userId: string) => boolean;
   sendDrag: (ticketId: string, phase: "start" | "move" | "end", col?: Status, index?: number) => void;
 };
 const C = createContext<Ctx>(null!);
@@ -31,11 +33,13 @@ type Ev = {
   ticket?: { id: string; key: string; title: string; status?: Status; position?: number };
   from?: Status; changes?: string[]; body?: string;
   ticketId?: string; phase?: "start" | "move" | "end"; col?: Status; index?: number; userId?: string; role?: string; name?: string;
+  online?: boolean; projects?: Record<string, string[]>;
 };
 
 export function RealtimeProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const { projects } = useWorkspace();
+  const { projects, project } = useWorkspace();
+  const [presence, setPresence] = useState<Record<string, string[]>>({});
   const qc = useQueryClient();
   const [connected, setConnected] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -62,6 +66,11 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       const q = (extra: string[] = ["tickets", e.projectId]) => qc.invalidateQueries({ queryKey: extra });
       switch (type) {
         case "ready": setConnected(true); qc.invalidateQueries({ queryKey: ["tickets"] }); break; // resync after (re)connect
+        case "presence.snapshot": setPresence(e.projects ?? {}); break;
+        case "presence":
+          setPresence((p) => { const cur = new Set(p[e.projectId] ?? []); if (e.online) cur.add(e.userId!); else cur.delete(e.userId!); return { ...p, [e.projectId]: [...cur] }; });
+          break;
+        case "notification": qc.invalidateQueries({ queryKey: ["notifications"] }); break; // the bell refetches; popups are shown by the event itself
         case "drag": {
           if (mine || !e.ticketId) break;
           setRemoteDrags((d) => {
@@ -121,7 +130,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           }
         } catch { /* network drop or abort: fall through to reconnect */ }
         if (stop) return;
-        setConnected(false);
+        setConnected(false); setPresence({});
         await new Promise((r) => setTimeout(r, delay));
         delay = Math.min(delay * 2, 10000);
       }
@@ -145,5 +154,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
 
   const notify = useCallback((text: string, kind: ToastKind = "denied") => toast(kind, null, text), [toast]);
 
-  return <C.Provider value={{ connected, toasts, dismiss, notify, remoteDrags, sendDrag }}>{children}</C.Provider>;
+  const onlineIds = project ? presence[project.id] ?? [] : [];
+  const isOnline = (id: string) => onlineIds.includes(id);
+
+  return <C.Provider value={{ connected, toasts, dismiss, notify, remoteDrags, sendDrag, onlineIds, isOnline }}>{children}</C.Provider>;
 }

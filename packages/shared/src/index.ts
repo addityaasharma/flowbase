@@ -40,4 +40,4 @@ export const updateTicketSchema = createTicketSchema.omit({ projectId: true }).p
 export const moveTicketSchema = z.object({
   status: z.enum(STATUSES), beforeId: z.string().nullable().optional(), afterId: z.string().nullable().optional(),
 });
-export const commentSchema = z.object({ body: z.string().trim().min(1).max(5000) });
+export const commentSchema = z.object({ body: z.string().trim().min(1).max(5000), parentId: z.string().optional() });

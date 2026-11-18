@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import clsx from "clsx";
 import { Bold, Code, ImagePlus, Italic, Link2, List, ListChecks, ListOrdered } from "lucide-react";
@@ -24,6 +24,9 @@ export function RichEditor({ value, onChange, placeholder, rows = 4, onSubmit, a
   const [busy, setBusy] = useState(0);
   const [err, setErr] = useState("");
   const [drag, setDrag] = useState(false);
+  // focus with the caret AFTER any existing text (e.g. a prefilled "@Name "), not at the start
+  useEffect(() => { const t = ref.current; if (autoFocus && t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); selRef.current = t.value.length; } // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const commit = (text: string, a: number, b = a) => {
     flushSync(() => onChange(text));            // render the new text now, so the caret can be placed before the next keystroke
@@ -113,7 +116,7 @@ export function RichEditor({ value, onChange, placeholder, rows = 4, onSubmit, a
         </div>
       </div>
       {tab === "write" ? (
-        <textarea ref={ref} rows={rows} value={value} autoFocus={autoFocus} placeholder={placeholder}
+        <textarea ref={ref} rows={rows} value={value} placeholder={placeholder}
           onChange={(e) => { onChange(e.target.value); selRef.current = e.target.selectionStart; }}
           onSelect={(e) => { selRef.current = e.currentTarget.selectionStart; }}
           onKeyDown={onKeyDown}

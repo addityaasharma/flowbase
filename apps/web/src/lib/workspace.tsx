@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Role } from "@bitcode/shared";
 import { api } from "./api";
@@ -13,6 +13,8 @@ type Ctx = {
   members: User[]; myRole: Role | null; canManage: boolean; // canManage = admin or manager of the current project
   assignee: string; setAssignee: (id: string) => void;
   tickets: Ticket[]; refetchTickets: () => void; openTicket: (id: string | null) => void; openId: string | null;
+  /** Open any ticket you can access (switching project if needed). Resolves false if it no longer exists. */
+  goToTicket: (id: string) => Promise<boolean>;
   raise: boolean; setRaise: (v: boolean) => void;
   newProject: boolean; setNewProject: (v: boolean) => void;
 };
@@ -33,6 +35,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [newProject, setNewProject] = useState(false);
 
   // queries are per signed-in user: a different account must never see cached data from the previous one
+  const goToTicket = useCallback(async (id: string) => {
+    try { const t = await api<Ticket>(`/tickets/${id}`); setProjectId(t.project.id); openTicket(id); return true; }
+    catch { return false; } // no access or deleted: stay where we are
+  }, []);
+
   // Deep link from an email ("Open task"): remember the ticket, clean the URL, then open it once we know who the user is.
   useEffect(() => {
     try {
@@ -45,8 +52,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     let id: string | null = null;
     try { id = sessionStorage.getItem(LINK_KEY); sessionStorage.removeItem(LINK_KEY); } catch { /* ignore */ }
     if (!id) return;
-    api<Ticket>(`/tickets/${id}`).then((t) => { setProjectId(t.project.id); openTicket(id); }).catch(() => { /* no access or deleted: stay on the board */ });
-  }, [user]);
+    goToTicket(id);
+  }, [user, goToTicket]);
 
   const projects = useQuery({ queryKey: ["projects", user?.id], enabled: !!user, queryFn: () => api<Project[]>("/projects") });
   const project = projects.data?.find((p) => p.id === projectId) ?? projects.data?.[0];
@@ -68,7 +75,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       projects: projects.data ?? [], projectsLoaded: projects.isSuccess, project, setProjectId: (id) => { setProjectId(id); setAssignee("all"); },
       toneOf, members: project?.members ?? [], myRole, canManage: myRole === "ADMIN" || myRole === "MANAGER",
       assignee, setAssignee, tickets: filtered, refetchTickets: () => tickets.refetch(), openTicket, openId,
-      raise, setRaise, newProject, setNewProject,
+      goToTicket, raise, setRaise, newProject, setNewProject,
     }}>{children}</C.Provider>
   );
 }

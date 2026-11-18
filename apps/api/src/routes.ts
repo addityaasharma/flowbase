@@ -12,6 +12,7 @@ import { requireAuth, signToken } from "./auth";
 import { rateLimit } from "./rateLimit";
 import { sendAssignmentEmail, sendInviteEmail } from "./mail";
 import { grant, openStream, publish, revoke } from "./events";
+import { notify, ticketAudience } from "./notifications";
 import express from "express";
 import { MAX_UPLOAD_BYTES, saveUpload, serveUpload } from "./uploads";
 import { STATUSES } from "@bitcode/shared";
@@ -113,7 +114,13 @@ router.post("/invitations/accept", rateLimit("accept", 20, 15 * 60_000), wrap(as
     });
   }
   await prisma.invitation.update({ where: { id: inv.id }, data: { acceptedAt: new Date() } });
-  if (inv.projectId) { grant(user.id, inv.projectId); publish({ type: "member.joined", projectId: inv.projectId, actor: { id: user.id, name: user.name } }); }
+  if (inv.projectId) {
+    const pid = inv.projectId;
+    grant(user.id, pid); publish({ type: "member.joined", projectId: pid, actor: { id: user.id, name: user.name } });
+    void prisma.projectMember.findMany({ where: { projectId: pid, role: { in: ["ADMIN", "MANAGER"] } }, select: { userId: true } })
+      .then((a) => notify({ userIds: a.map((x) => x.userId), actor: { id: user.id, name: user.name }, kind: "member", text: `joined ${inv.project?.name ?? "the project"}`, projectId: pid }))
+      .catch(console.error);
+  }
   res.status(201).json({ token: signToken(user.id), user: { id: user.id, name: user.name, email: user.email, title: user.title, active: user.active } });
 }));
 
@@ -189,6 +196,9 @@ router.patch("/projects/:id/members/:userId", wrap(async (req, res) => {
     return res.status(400).json({ error: "A project needs at least one admin" });
   await prisma.projectMember.update({ where: { projectId_userId: { projectId: req.params.id, userId: req.params.userId } }, data: { role } });
   publish({ type: "member.role", projectId: req.params.id, actor: actorOf(req), userId: req.params.userId, role });
+  void prisma.project.findUnique({ where: { id: req.params.id }, select: { name: true } })
+    .then((p) => notify({ userIds: [req.params.userId], actor: actorOf(req), kind: "member", text: `changed your role to ${role} in “${p?.name}”`, projectId: req.params.id }))
+    .catch(console.error);
   res.json({ ok: true });
 }));
 
@@ -206,6 +216,10 @@ router.delete("/projects/:id/members/:userId", wrap(async (req, res) => {
     prisma.projectMember.delete({ where: { projectId_userId: { projectId: req.params.id, userId: req.params.userId } } }),
   ]);
   publish({ type: "member.removed", projectId: req.params.id, actor: actorOf(req), userId: req.params.userId }); // sent before revoke so the removed user also learns of it
+  if (req.params.userId !== req.user!.id)
+    void prisma.project.findUnique({ where: { id: req.params.id }, select: { name: true } })
+      .then((p) => notify({ userIds: [req.params.userId], actor: actorOf(req), kind: "member", text: `removed you from “${p?.name}”` }))
+      .catch(console.error);
   revoke(req.params.id, req.params.userId);
   res.json({ ok: true });
 }));
@@ -309,6 +323,7 @@ router.post("/tickets", rateLimit("ticket", 300, 60 * 60_000), wrap(async (req, 
   await log(t.id, req.user!.id, "created this ticket");
   const created = withKey(t);
   void emailNewAssignees(t.id, d.assigneeIds ?? [], actorOf(req)).catch(console.error);
+  void notify({ userIds: d.assigneeIds ?? [], actor: actorOf(req), kind: "assigned", text: `assigned you ${created.key} “${t.title}”`, projectId: d.projectId, ticketId: t.id }).catch(console.error);
   publish({ type: "ticket.created", projectId: d.projectId, actor: actorOf(req), ticket: { id: t.id, key: created.key, title: t.title, status: t.status } });
   res.status(201).json(created);
 }));
@@ -354,6 +369,10 @@ router.patch("/tickets/:id", wrap(async (req, res) => {
   for (const c of changes) await log(t.id, req.user!.id, c);
   const out = withKey(updated);
   if (changes.length) publish({ type: "ticket.updated", projectId: t.projectId, actor: actorOf(req), ticket: { id: t.id, key: out.key, title: updated.title }, changes });
+  const who = actorOf(req), base = { actor: who, projectId: t.projectId, ticketId: t.id };
+  if (added.length) void notify({ ...base, userIds: added, kind: "assigned", text: `assigned you ${out.key} “${updated.title}”` }).catch(console.error);
+  if (removed.length) void notify({ ...base, userIds: removed, kind: "assigned", text: `unassigned you from ${out.key} “${updated.title}”` }).catch(console.error);
+  if (changes.length) void ticketAudience(t.id).then((aud) => notify({ ...base, userIds: aud.filter((id) => !added.includes(id)), kind: "updated", text: `${changes.join(", ")} on ${out.key}` })).catch(console.error);
   res.json(out);
 }));
 
@@ -375,6 +394,8 @@ router.post("/tickets/:id/move", wrap(async (req, res) => {
   if (status !== t.status) await log(t.id, req.user!.id, `moved from ${STATUS_LABEL[t.status]} to ${STATUS_LABEL[status]}`);
   const out = withKey(updated);
   publish({ type: "ticket.moved", projectId: t.projectId, actor: actorOf(req), from: t.status, ticket: { id: t.id, key: out.key, title: updated.title, status, position } });
+  if (status !== t.status)
+    void ticketAudience(t.id).then((aud) => notify({ userIds: aud, actor: actorOf(req), kind: "moved", text: `moved ${out.key} “${updated.title}” to ${STATUS_LABEL[status]}`, projectId: t.projectId, ticketId: t.id })).catch(console.error);
   res.json(out);
 }));
 
@@ -391,17 +412,48 @@ router.delete("/tickets/:id", wrap(async (req, res) => {
   const t = await loadTicket(req, res); if (!t) return;
   if (t.reporterId !== req.user!.id) return res.status(403).json({ error: "Only the person who created this ticket can delete it" });
   const key = withKey(t).key;
+  const audience = await ticketAudience(t.id);
   await prisma.ticket.delete({ where: { id: t.id } });
+  void notify({ userIds: audience, actor: actorOf(req), kind: "deleted", text: `deleted ${key} “${t.title}”`, projectId: t.projectId }).catch(console.error);
   publish({ type: "ticket.deleted", projectId: t.projectId, actor: actorOf(req), ticket: { id: t.id, key, title: t.title } });
   res.json({ ok: true });
 }));
 
 router.post("/tickets/:id/comments", wrap(async (req, res) => {
   const t = await loadTicket(req, res); if (!t) return;
-  const { body } = commentSchema.parse(req.body);
-  const c = await prisma.comment.create({ data: { ticketId: t.id, authorId: req.user!.id, body }, include: { author: { select: userSelect } } });
-  publish({ type: "comment.created", projectId: t.projectId, actor: actorOf(req), ticket: { id: t.id, key: withKey(t).key, title: t.title }, body: plainExcerpt(body) });
+  const { body, parentId } = commentSchema.parse(req.body);
+  // Replies are one level deep: replying to a reply attaches to the original comment.
+  let rootId: string | null = null, replyTo: { authorId: string } | null = null;
+  if (parentId) {
+    const p = await prisma.comment.findFirst({ where: { id: parentId, ticketId: t.id }, select: { id: true, parentId: true, authorId: true } });
+    if (!p) return res.status(400).json({ error: "The comment you're replying to no longer exists" });
+    rootId = p.parentId ?? p.id; replyTo = p;
+  }
+  const c = await prisma.comment.create({ data: { ticketId: t.id, authorId: req.user!.id, body, parentId: rootId }, include: { author: { select: userSelect } } });
+  const key = withKey(t).key, excerpt = plainExcerpt(body), who = actorOf(req);
+  publish({ type: "comment.created", projectId: t.projectId, actor: who, ticket: { id: t.id, key, title: t.title }, body: excerpt, reply: !!rootId });
+  const base = { actor: who, projectId: t.projectId, ticketId: t.id, kind: "comment" };
+  if (replyTo && replyTo.authorId !== who.id) void notify({ ...base, userIds: [replyTo.authorId], text: `replied to your comment on ${key}: “${excerpt}”` }).catch(console.error);
+  void ticketAudience(t.id).then((aud) => notify({ ...base, userIds: aud.filter((id) => id !== replyTo?.authorId), text: `${rootId ? "replied" : "commented"} on ${key}: “${excerpt}”` })).catch(console.error);
   res.status(201).json(c);
+}));
+
+// ---------- notifications (the bell) ----------
+router.get("/notifications", wrap(async (req, res) => {
+  const me = req.user!.id, limit = Math.min(Number(req.query.limit) || 40, 100);
+  const [items, unread] = await Promise.all([
+    prisma.notification.findMany({ where: { userId: me, ...(req.query.unread === "1" ? { readAt: null } : {}) }, orderBy: { createdAt: "desc" }, take: limit }),
+    prisma.notification.count({ where: { userId: me, readAt: null } }),
+  ]);
+  res.json({ items, unread });
+}));
+router.post("/notifications/read-all", wrap(async (req, res) => {
+  const r = await prisma.notification.updateMany({ where: { userId: req.user!.id, readAt: null }, data: { readAt: new Date() } });
+  res.json({ ok: true, marked: r.count });
+}));
+router.post("/notifications/:id/read", wrap(async (req, res) => {
+  await prisma.notification.updateMany({ where: { id: req.params.id, userId: req.user!.id, readAt: null }, data: { readAt: new Date() } });
+  res.json({ ok: true });
 }));
 
 void z;

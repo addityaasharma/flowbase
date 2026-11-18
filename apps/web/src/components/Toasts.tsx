@@ -3,7 +3,7 @@ import { ArrowRight, Lock, MessageSquare, Pencil, Plus, Trash2, UserPlus } from 
 import { useRealtime, type ToastKind } from "@/lib/realtime";
 import { useWorkspace } from "@/lib/workspace";
 
-const ICON: Record<ToastKind, { Icon: typeof Plus; cls: string }> = {
+export const ICON: Record<ToastKind, { Icon: typeof Plus; cls: string }> = {
   moved: { Icon: ArrowRight, cls: "bg-indigo-100 text-indigo-600" },
   created: { Icon: Plus, cls: "bg-emerald-100 text-emerald-600" },
   comment: { Icon: MessageSquare, cls: "bg-amber-100 text-amber-600" },
@@ -11,6 +11,7 @@ const ICON: Record<ToastKind, { Icon: typeof Plus; cls: string }> = {
   deleted: { Icon: Trash2, cls: "bg-rose-100 text-rose-600" },
   member: { Icon: UserPlus, cls: "bg-violet-100 text-violet-600" },
   denied: { Icon: Lock, cls: "bg-amber-100 text-amber-600" },
+  assigned: { Icon: UserPlus, cls: "bg-indigo-100 text-indigo-600" },
 };
 
 /** Live activity popups: bottom-right, fade in, fade out after ~5s. Click to open the ticket. */

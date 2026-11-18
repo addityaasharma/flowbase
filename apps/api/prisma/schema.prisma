@@ -48,6 +48,7 @@ model User {
   activities   Activity[]
   invitesSent  Invitation[]
   uploads      Upload[]
+  notifications Notification[]
 }
 
 model Project {
@@ -91,6 +92,7 @@ model Ticket {
   updatedAt   DateTime   @updatedAt
   comments    Comment[]
   activities  Activity[]
+  notifications Notification[]
 
   @@unique([projectId, number])
   @@index([projectId, status, position])
@@ -103,7 +105,12 @@ model Comment {
   authorId  String
   author    User     @relation(fields: [authorId], references: [id])
   body      String
+  parentId  String?
+  parent    Comment? @relation("Replies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("Replies")
   createdAt DateTime @default(now())
+
+  @@index([ticketId, createdAt])
 }
 
 model Activity {
@@ -154,4 +161,23 @@ model Upload {
 
   @@index([userId, createdAt])
   @@index([createdAt])
+}
+
+/// Inbox entry for one person. Kept until read for 30 days / 90 days at most (see cleanup).
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  actorId   String?
+  actorName String?
+  kind      String
+  text      String
+  projectId String?
+  ticketId  String?
+  ticket    Ticket?   @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
 }
