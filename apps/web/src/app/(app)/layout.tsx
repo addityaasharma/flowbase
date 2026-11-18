@@ -106,7 +106,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             )}
           </div>
         </div>
-        {hasProject && <div className="mx-auto grid max-w-[1600px] grid-cols-2 gap-3 px-6 pb-4 md:grid-cols-4">
+        {hasProject && path !== "/profile" && <div className="mx-auto grid max-w-[1600px] grid-cols-2 gap-3 px-6 pb-4 md:grid-cols-4">
           {stats.map(([label, n, cls]) => (
             <div key={label} className={clsx("flex items-baseline justify-between rounded-2xl bg-white px-5 py-3 shadow-card", cls)}>
               <span className="text-[13px] font-medium">{label}</span><span className="text-3xl font-semibold tracking-tight text-slate-900">{n}</span>

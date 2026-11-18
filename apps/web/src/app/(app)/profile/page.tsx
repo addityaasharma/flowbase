@@ -16,9 +16,9 @@ function ChangePassword() {
   const [error, setError] = useState("");
   const mismatch = again.length > 0 && next !== again;
   return (
-    <section className="rounded-[28px] bg-white p-7 shadow-card">
-      <h3 className="text-xl font-semibold tracking-tight">Change password</h3>
-      <form className="mt-4 grid gap-3 sm:grid-cols-3" onSubmit={async (e) => {
+    <section className="rounded-[28px] bg-white p-5 shadow-card">
+      <h3 className="text-lg font-semibold tracking-tight">Change password</h3>
+      <form className="mt-3 grid gap-2.5" onSubmit={async (e) => {
         e.preventDefault(); if (mismatch) return;
         setState("saving"); setError("");
         try {
@@ -29,8 +29,8 @@ function ChangePassword() {
         <input className={inputCls} type="password" placeholder="Current password" autoComplete="current-password" value={cur} onChange={(e) => setCur(e.target.value)} required />
         <input className={inputCls} type="password" placeholder="New password (min 8)" autoComplete="new-password" minLength={8} value={next} onChange={(e) => setNext(e.target.value)} required />
         <input className={inputCls} type="password" placeholder="Repeat new password" autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} required />
-        <div className="flex items-center gap-3 sm:col-span-3">
-          <button className={btnPrimary} disabled={state === "saving" || mismatch}>
+        <div className="flex flex-wrap items-center gap-3">
+          <button className={btnPrimary + " w-full"} disabled={state === "saving" || mismatch}>
             {state === "saved" ? <><Check className="h-4 w-4" />Password updated</> : state === "saving" ? "Updating…" : "Update password"}</button>
           {mismatch && <span className="text-sm text-rose-600">Passwords don’t match</span>}
           {error && <span className="text-sm text-rose-600">{error}</span>}
@@ -61,53 +61,60 @@ export default function Profile() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
-      <section className="rounded-[28px] bg-white p-7 shadow-card">
-        <div className="flex items-center gap-5">
-          <Avatar user={user} size={72} />
-          <div className="min-w-0 flex-1">
-            <h2 className="text-2xl font-semibold tracking-tight">Your profile</h2>
-            <p className="truncate text-sm text-slate-500">{user.email}</p>
+    // split view: profile + password on the left, projects on the right (only the projects list scrolls on wide screens)
+    <div className="mx-auto grid max-w-6xl gap-6 lg:h-full lg:grid-cols-[380px_minmax(0,1fr)]">
+      <div className="space-y-5 lg:overflow-y-auto lg:pr-1">
+        <section className="rounded-[28px] bg-white p-5 shadow-card">
+          <div className="flex items-center gap-3.5">
+            <Avatar user={user} size={56} />
+            <div className="min-w-0 flex-1">
+              <h2 className="text-xl font-semibold tracking-tight">Your profile</h2>
+              <p className="truncate text-sm text-slate-500" title={user.email}>{user.email}</p>
+            </div>
+            <button className="flex shrink-0 items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200" onClick={logout} title="Sign out"><LogOut className="h-3.5 w-3.5" />Sign out</button>
           </div>
-          <button className={btnGhost} onClick={logout}><LogOut className="h-4 w-4" />Sign out</button>
-        </div>
-        <form className="mt-6 flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); if (dirty) save(); }}>
-          <label className="min-w-60 flex-1 text-xs font-medium text-slate-500">Display name
-            <input className={inputCls + " mt-1"} value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
-          </label>
-          <button className={btnPrimary} disabled={!dirty || state === "saving"}>
-            {state === "saved" ? <><Check className="h-4 w-4" />Saved</> : state === "saving" ? "Saving…" : "Save changes"}
-          </button>
-        </form>
-        {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
-      </section>
+          <form className="mt-4" onSubmit={(e) => { e.preventDefault(); if (dirty) save(); }}>
+            <label className="block text-xs font-medium text-slate-500">Display name</label>
+            <div className="mt-1 flex gap-2">
+              <input className={inputCls} value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
+              <button className={btnPrimary + " shrink-0 px-4"} disabled={!dirty || state === "saving"}>
+                {state === "saved" ? <Check className="h-4 w-4" /> : state === "saving" ? "…" : "Save"}
+              </button>
+            </div>
+          </form>
+          {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
+        </section>
 
-      <ChangePassword />
+        <ChangePassword />
 
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
+      </div>
+
+      <section className="flex min-h-0 flex-col rounded-[28px] bg-slate-200/50 p-4 lg:h-full">
+        <div className="mb-3 flex shrink-0 items-center justify-between px-1">
           <h3 className="text-xl font-semibold tracking-tight">Your projects ({projects.length})</h3>
           <button className={btnGhost} onClick={() => setNewProject(true)}><FolderPlus className="h-4 w-4" />New project</button>
         </div>
-        {projects.length === 0 && <p className="rounded-[24px] bg-white p-6 text-sm text-slate-500 shadow-card">You’re not in any project yet. Create one, or ask a teammate to invite you.</p>}
-        <div className="grid gap-4 sm:grid-cols-2">
-          {projects.map((p) => (
-            <div key={p.id} className="flex flex-col rounded-[24px] bg-white p-5 shadow-card transition hover:shadow-lift">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="truncate font-semibold">{p.name}</div>
-                  <div className="text-xs text-slate-500">{p.key} · {p.members.length} member{p.members.length === 1 ? "" : "s"} · {p._count.tickets} ticket{p._count.tickets === 1 ? "" : "s"}</div>
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1">
+          {projects.length === 0 && <p className="rounded-[24px] bg-white p-6 text-sm text-slate-500 shadow-card">You’re not in any project yet. Create one, or ask a teammate to invite you.</p>}
+          <div className="grid gap-3 xl:grid-cols-2">
+            {projects.map((p) => (
+              <div key={p.id} className="flex flex-col rounded-[24px] bg-white p-5 shadow-card transition hover:shadow-lift">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate font-semibold">{p.name}</div>
+                    <div className="text-xs text-slate-500">{p.key} · {p.members.length} member{p.members.length === 1 ? "" : "s"} · {p._count.tickets} ticket{p._count.tickets === 1 ? "" : "s"}</div>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">{p.myRole}</span>
                 </div>
-                <span className="shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">{p.myRole}</span>
+                {p.description && <p className="mt-2 line-clamp-2 text-sm text-slate-500">{p.description}</p>}
+                <div className="mt-4 flex items-center justify-between">
+                  {project?.id === p.id ? <span className="text-xs font-medium text-emerald-600">● Currently open</span> : <span />}
+                  <button className="flex items-center gap-1 rounded-full bg-indigo-50 px-3.5 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-100"
+                    onClick={() => { setProjectId(p.id); router.push("/"); }}>Open board<ArrowRight className="h-3 w-3" /></button>
+                </div>
               </div>
-              {p.description && <p className="mt-2 line-clamp-2 text-sm text-slate-500">{p.description}</p>}
-              <div className="mt-4 flex items-center justify-between">
-                {project?.id === p.id ? <span className="text-xs font-medium text-emerald-600">● Currently open</span> : <span />}
-                <button className="flex items-center gap-1 rounded-full bg-indigo-50 px-3.5 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-100"
-                  onClick={() => { setProjectId(p.id); router.push("/"); }}>Open board<ArrowRight className="h-3 w-3" /></button>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </section>
     </div>

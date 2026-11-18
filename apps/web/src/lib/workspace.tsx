@@ -15,11 +15,15 @@ type Ctx = {
   newProject: boolean; setNewProject: (v: boolean) => void;
 };
 const C = createContext<Ctx>(null!);
+
+// the project you are in survives a page refresh (browser-local; falls back to your first project if it is gone)
+const PROJECT_KEY = "flowbase:project";
+const readSavedProject = () => { try { return localStorage.getItem(PROJECT_KEY) ?? ""; } catch { return ""; } };
 export const useWorkspace = () => useContext(C);
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [projectId, setProjectId] = useState("");
+  const [projectId, setProjectId] = useState(readSavedProject);
   const [assignee, setAssignee] = useState("all");
   const [openId, openTicket] = useState<string | null>(null);
   const [raise, setRaise] = useState(false);
@@ -29,6 +33,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const projects = useQuery({ queryKey: ["projects", user?.id], enabled: !!user, queryFn: () => api<Project[]>("/projects") });
   const project = projects.data?.find((p) => p.id === projectId) ?? projects.data?.[0];
   useEffect(() => { if (project && project.id !== projectId) setProjectId(project.id); }, [project, projectId]);
+  useEffect(() => { if (project) { try { localStorage.setItem(PROJECT_KEY, project.id); } catch { /* storage blocked: just not remembered */ } } }, [project]);
 
   const tickets = useQuery({
     queryKey: ["tickets", project?.id], enabled: !!project, refetchInterval: 30000, // safety net; real-time updates arrive over the event stream
