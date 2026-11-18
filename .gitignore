@@ -6,3 +6,4 @@ dist
 *.log
 *.tsbuildinfo
 apps/api/uploads
+.secrets.local
