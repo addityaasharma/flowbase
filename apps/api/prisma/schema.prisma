@@ -47,6 +47,7 @@ model User {
   comments     Comment[]
   activities   Activity[]
   invitesSent  Invitation[]
+  uploads      Upload[]
 }
 
 model Project {
@@ -140,4 +141,17 @@ model TicketAssignee {
 
   @@id([ticketId, userId])
   @@index([userId])
+}
+
+/// One row per stored image: lets us enforce per-user quotas and clean up images nobody uses any more.
+model Upload {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  bytes     Int
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
 }

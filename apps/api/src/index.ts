@@ -3,6 +3,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 import cors from "cors";
 import { ZodError } from "zod";
 import { router } from "./routes";
+import { startUploadCleanup } from "./cleanup";
 
 const app = express();
 app.set("trust proxy", 1); // behind nginx: real client IP for rate limiting
@@ -25,4 +26,4 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 const port = Number(process.env.PORT) || 4000;
-app.listen(port, () => console.log(`API listening on :${port}`));
+app.listen(port, () => { console.log(`API listening on :${port}`); startUploadCleanup(); });
