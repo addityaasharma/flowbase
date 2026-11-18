@@ -31,7 +31,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   useEffect(() => { if (project && project.id !== projectId) setProjectId(project.id); }, [project, projectId]);
 
   const tickets = useQuery({
-    queryKey: ["tickets", project?.id], enabled: !!project, refetchInterval: 5000, // "live sync"
+    queryKey: ["tickets", project?.id], enabled: !!project, refetchInterval: 30000, // safety net; real-time updates arrive over the event stream
     queryFn: () => api<Ticket[]>(`/tickets?projectId=${project!.id}`),
   });
   const list = project ? tickets.data ?? [] : [];

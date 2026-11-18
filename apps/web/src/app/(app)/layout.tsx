@@ -10,6 +10,8 @@ import { TicketDrawer } from "@/components/TicketDrawer";
 import { RaiseTicket } from "@/components/RaiseTicket";
 import { NewProject } from "@/components/NewProject";
 import { SignInPopover } from "@/components/SignInPopover";
+import { Toasts } from "@/components/Toasts";
+import { RealtimeProvider, useRealtime } from "@/lib/realtime";
 import { STATUSES } from "@bitcode/shared";
 
 const TABS = [
@@ -43,6 +45,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const { user, loading, logout, requireAuth, setSignInOpen } = useAuth();
   const path = usePathname();
   const w = useWorkspace();
+  const rt = useRealtime();
   const count = (s: string[]) => w.tickets.filter((t) => s.includes(t.status)).length;
   const stats = [
     ["Open / Blocked", count(["TODO", "BLOCKED"]), "text-slate-500"],
@@ -63,7 +66,9 @@ function Shell({ children }: { children: React.ReactNode }) {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-[22px] font-semibold tracking-tight">Bitcode Tracker</h1>
-                {hasProject && <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">● Live Sync</span>}
+                {hasProject && (rt.connected
+                  ? <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700" title="Updates appear instantly">● Live</span>
+                  : <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700" title="Reconnecting…">● Reconnecting…</span>)}
               </div>
               {hasProject ? <select className="-ml-1 bg-transparent text-sm text-slate-500 outline-none" value={w.project?.id ?? ""} onChange={(e) => w.setProjectId(e.target.value)}>
                 {w.projects.map((p) => <option key={p.id} value={p.id}>{p.name} • {p.members.length} Members</option>)}
@@ -110,6 +115,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       </header>
       <main className="min-h-0 w-full flex-1 overflow-y-auto"><div className="mx-auto h-full max-w-[1600px] px-6 pb-6 pt-5">{loading ? null : empty && !(user && path === "/profile") ? <Welcome /> : children}</div></main>
       <SignInPopover />
+      <Toasts />
       {w.newProject && <NewProject onClose={() => w.setNewProject(false)} />}
       {w.raise && <RaiseTicket onClose={() => w.setRaise(false)} />}
       {w.openId && <TicketDrawer id={w.openId} onClose={() => w.openTicket(null)} />}
@@ -118,5 +124,5 @@ function Shell({ children }: { children: React.ReactNode }) {
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  return <WorkspaceProvider><Shell>{children}</Shell></WorkspaceProvider>;
+  return <WorkspaceProvider><RealtimeProvider><Shell>{children}</Shell></RealtimeProvider></WorkspaceProvider>;
 }

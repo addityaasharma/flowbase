@@ -1,5 +1,5 @@
 // Same host as the page (so it works over LAN / a server), port 4000, unless NEXT_PUBLIC_API_URL is set.
-const BASE = process.env.NEXT_PUBLIC_API_URL || (typeof window !== "undefined" ? `${location.protocol}//${location.hostname}:4000/api` : "http://localhost:4000/api");
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || (typeof window !== "undefined" ? `${location.protocol}//${location.hostname}:4000/api` : "http://localhost:4000/api");
 const KEY = "bitcode_token";
 
 export const tokenStore = {
@@ -10,7 +10,7 @@ export const tokenStore = {
 
 export async function api<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
   const token = tokenStore.get();
-  const res = await fetch(BASE + path, {
+  const res = await fetch(API_BASE + path, {
     ...init,
     headers: {
       "Content-Type": "application/json",

@@ -15,7 +15,7 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
   const { requireAuth } = useAuth();
   const qc = useQueryClient();
   const [comment, setComment] = useState("");
-  const q = useQuery({ queryKey: ["ticket", id], queryFn: () => api<TicketDetail>(`/tickets/${id}`), refetchInterval: 5000 });
+  const q = useQuery({ queryKey: ["ticket", id], queryFn: () => api<TicketDetail>(`/tickets/${id}`), refetchInterval: 30000 }); // live updates arrive over the event stream; this is only a safety net
   const refresh = () => { qc.invalidateQueries({ queryKey: ["ticket", id] }); qc.invalidateQueries({ queryKey: ["tickets"] }); };
   const patch = useMutation({ mutationFn: (json: object) => api(`/tickets/${id}`, { method: "PATCH", json }), onSuccess: refresh });
   const addComment = useMutation({
@@ -25,12 +25,13 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
   const del = useMutation({ mutationFn: () => api(`/tickets/${id}`, { method: "DELETE" }), onSuccess: () => { qc.invalidateQueries({ queryKey: ["tickets"] }); openTicket(null); } });
   const t = q.data;
   const canDelete = !!user && !!q.data && q.data.reporter.id === user.id; // only the creator can delete
+  const canEdit = !!user && !!t && (t.reporter.id === user.id || t.assignee?.id === user.id); // assignee or creator; others can comment
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/25 backdrop-blur-sm anim-fade" onMouseDown={onClose}>
       <aside className="anim-slide h-full w-full max-w-xl overflow-y-auto rounded-l-[32px] bg-white p-8 shadow-lift" onMouseDown={(e) => e.stopPropagation()}>
         {!t ? <p className="text-slate-500">Loading…</p> : (
-          <fieldset disabled={!user} className="space-y-5">
+          <div className="space-y-5">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-500"><TypeIcon t={t.type} />{t.key}</div>
               <div className="flex gap-1">
@@ -38,6 +39,7 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                 <button onClick={onClose} className="rounded p-1.5 text-slate-400 hover:bg-slate-100">✕</button>
               </div>
             </div>
+            <fieldset disabled={!canEdit} className="m-0 min-w-0 space-y-5 border-0 p-0">
             <input key={t.updatedAt + "title"} className="w-full rounded-lg border border-transparent px-2 py-1 text-2xl font-semibold tracking-tight hover:border-slate-200 focus:border-indigo-500 focus:outline-none"
               defaultValue={t.title} onBlur={(e) => e.target.value.trim() && e.target.value !== t.title && patch.mutate({ title: e.target.value.trim() })} />
             <textarea key={t.updatedAt + "desc"} className={inputCls} rows={5} placeholder="Add a description…" defaultValue={t.description ?? ""}
@@ -49,7 +51,9 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                 <option value="">Unassigned</option>{members.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></label>
               <label>Due date<input type="date" className={inputCls} value={t.dueDate?.slice(0, 10) ?? ""} onChange={(e) => patch.mutate({ dueDate: e.target.value || null })} /></label>
             </div>
+            </fieldset>
             <p className="text-xs text-slate-500">Reported by {t.reporter.name} · {new Date(t.createdAt).toLocaleString()}</p>
+            {user && !canEdit && <p className="rounded-2xl bg-slate-100 px-4 py-2.5 text-sm text-slate-600">Only the assignee or the person who created this ticket can change it. You can still comment.</p>}
 
             <section>
               <h3 className="mb-2 text-sm font-semibold">Comments ({t.comments.length})</h3>
@@ -63,7 +67,7 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                   </div>
                 ))}
               </div>
-              <form className="mt-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); comment.trim() && addComment.mutate(); }}>
+              <form className={"mt-3 flex gap-2" + (user ? "" : " hidden")} onSubmit={(e) => { e.preventDefault(); comment.trim() && addComment.mutate(); }}>
                 <input className={inputCls} placeholder="Write a comment…" value={comment} onChange={(e) => setComment(e.target.value)} />
                 <button className={btnPrimary} disabled={addComment.isPending}>Send</button>
               </form>
@@ -75,7 +79,7 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                 {t.activities.map((a) => <li key={a.id}><b className="text-slate-700">{a.actor.name}</b> {a.message} · {new Date(a.createdAt).toLocaleString()}</li>)}
               </ul>
             </section>
-          </fieldset>
+          </div>
         )}
         {t && !user && (
           <button onClick={() => requireAuth()} className="mt-4 w-full rounded-full bg-indigo-50 px-4 py-2.5 text-sm font-medium text-indigo-600 hover:bg-indigo-100">Sign in to edit or comment</button>

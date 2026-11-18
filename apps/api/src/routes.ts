@@ -10,6 +10,8 @@ import { prisma } from "./db";
 import { requireAuth, signToken } from "./auth";
 import { rateLimit } from "./rateLimit";
 import { sendInviteEmail } from "./mail";
+import { grant, openStream, publish, revoke } from "./events";
+import { STATUSES } from "@bitcode/shared";
 import { flattenMembers, ticketInclude, userSelect, withKey } from "./serialize";
 
 const wrap = (fn: (req: Request, res: Response) => Promise<unknown>) =>
@@ -21,6 +23,11 @@ const hashToken = (t: string) => crypto.createHash("sha256").update(t).digest("h
 const WEB_URL = () => (process.env.WEB_URL || "http://localhost:3000").replace(/\/$/, "");
 const memberOf = (userId: string, projectId: string) =>
   prisma.projectMember.findUnique({ where: { projectId_userId: { projectId, userId } } });
+
+const actorOf = (req: Request) => ({ id: req.user!.id, name: req.user!.name });
+/** Only the assignee or the creator may change/move a ticket; everyone else in the project can read and comment. */
+const canEditTicket = (t: { reporterId: string; assigneeId: string | null }, userId: string) => t.reporterId === userId || t.assigneeId === userId;
+const NOT_ALLOWED = { error: "Only the assignee or the person who created this ticket can change it. You can still comment." };
 
 /** Resolves the caller's role in a project, or sends 403/404 and returns null. */
 async function projectAccess(req: Request, res: Response, projectId: string, allow?: Role[]) {
@@ -81,6 +88,7 @@ router.post("/invitations/accept", rateLimit("accept", 20, 15 * 60_000), wrap(as
     });
   }
   await prisma.invitation.update({ where: { id: inv.id }, data: { acceptedAt: new Date() } });
+  if (inv.projectId) { grant(user.id, inv.projectId); publish({ type: "member.joined", projectId: inv.projectId, actor: { id: user.id, name: user.name } }); }
   res.status(201).json({ token: signToken(user.id), user: { id: user.id, name: user.name, email: user.email, title: user.title, active: user.active } });
 }));
 
@@ -90,6 +98,8 @@ router.use(requireAuth);
 router.get("/auth/me", wrap(async (req, res) => {
   res.json(await prisma.user.findUnique({ where: { id: req.user!.id }, select: userSelect }));
 }));
+
+router.get("/events", wrap((req, res) => openStream(req, res)));
 
 router.patch("/auth/me", wrap(async (req, res) => {
   const { name } = z.object({ name: z.string().trim().min(1).max(80) }).parse(req.body);
@@ -131,7 +141,9 @@ router.post("/projects", rateLimit("project", 20, 60 * 60_000), wrap(async (req,
 
 router.delete("/projects/:id", wrap(async (req, res) => {
   if (!(await projectAccess(req, res, req.params.id, ["ADMIN"]))) return;
+  publish({ type: "project.deleted", projectId: req.params.id, actor: actorOf(req) });
   await prisma.project.delete({ where: { id: req.params.id } });
+  revoke(req.params.id);
   res.json({ ok: true });
 }));
 
@@ -145,6 +157,7 @@ router.patch("/projects/:id/members/:userId", wrap(async (req, res) => {
   if (target.role === "ADMIN" && role !== "ADMIN" && (await adminCount(req.params.id)) <= 1)
     return res.status(400).json({ error: "A project needs at least one admin" });
   await prisma.projectMember.update({ where: { projectId_userId: { projectId: req.params.id, userId: req.params.userId } }, data: { role } });
+  publish({ type: "member.role", projectId: req.params.id, actor: actorOf(req), userId: req.params.userId, role });
   res.json({ ok: true });
 }));
 
@@ -161,6 +174,8 @@ router.delete("/projects/:id/members/:userId", wrap(async (req, res) => {
     prisma.ticket.updateMany({ where: { projectId: req.params.id, assigneeId: req.params.userId }, data: { assigneeId: null } }),
     prisma.projectMember.delete({ where: { projectId_userId: { projectId: req.params.id, userId: req.params.userId } } }),
   ]);
+  publish({ type: "member.removed", projectId: req.params.id, actor: actorOf(req), userId: req.params.userId }); // sent before revoke so the removed user also learns of it
+  revoke(req.params.id, req.params.userId);
   res.json({ ok: true });
 }));
 
@@ -259,7 +274,9 @@ router.post("/tickets", rateLimit("ticket", 300, 60 * 60_000), wrap(async (req, 
     });
   });
   await log(t.id, req.user!.id, "created this ticket");
-  res.status(201).json(withKey(t));
+  const created = withKey(t);
+  publish({ type: "ticket.created", projectId: d.projectId, actor: actorOf(req), ticket: { id: t.id, key: created.key, title: t.title, status: t.status } });
+  res.status(201).json(created);
 }));
 
 async function loadTicket(req: Request, res: Response) {
@@ -279,6 +296,7 @@ router.get("/tickets/:id", wrap(async (req, res) => {
 
 router.patch("/tickets/:id", wrap(async (req, res) => {
   const t = await loadTicket(req, res); if (!t) return;
+  if (!canEditTicket(t, req.user!.id)) return res.status(403).json(NOT_ALLOWED);
   const d = updateTicketSchema.parse(req.body);
   if (!(await assigneeOk(res, t.projectId, d.assigneeId))) return;
   const { dueDate, ...rest } = d;
@@ -294,12 +312,15 @@ router.patch("/tickets/:id", wrap(async (req, res) => {
   if (d.assigneeId !== undefined && d.assigneeId !== t.assigneeId)
     changes.push(updated.assignee ? `assigned to ${updated.assignee.name}` : "unassigned the ticket");
   for (const c of changes) await log(t.id, req.user!.id, c);
-  res.json(withKey(updated));
+  const out = withKey(updated);
+  if (changes.length) publish({ type: "ticket.updated", projectId: t.projectId, actor: actorOf(req), ticket: { id: t.id, key: out.key, title: updated.title }, changes });
+  res.json(out);
 }));
 
 // Drag & drop: change status and place between two neighbours (fractional positions)
 router.post("/tickets/:id/move", wrap(async (req, res) => {
   const t = await loadTicket(req, res); if (!t) return;
+  if (!canEditTicket(t, req.user!.id)) return res.status(403).json(NOT_ALLOWED);
   const { status, beforeId, afterId } = moveTicketSchema.parse(req.body);
   const [before, after] = await Promise.all([
     beforeId ? prisma.ticket.findFirst({ where: { id: beforeId, projectId: t.projectId }, select: { position: true } }) : null,
@@ -312,13 +333,26 @@ router.post("/tickets/:id/move", wrap(async (req, res) => {
   else position = 1000;
   const updated = await prisma.ticket.update({ where: { id: t.id }, data: { status, position }, include: ticketInclude });
   if (status !== t.status) await log(t.id, req.user!.id, `moved from ${STATUS_LABEL[t.status]} to ${STATUS_LABEL[status]}`);
-  res.json(withKey(updated));
+  const out = withKey(updated);
+  publish({ type: "ticket.moved", projectId: t.projectId, actor: actorOf(req), from: t.status, ticket: { id: t.id, key: out.key, title: updated.title, status, position } });
+  res.json(out);
+}));
+
+// Live drag presence: lets other members watch a card being dragged (nothing is saved).
+router.post("/tickets/:id/drag", wrap(async (req, res) => {
+  const t = await loadTicket(req, res); if (!t) return;
+  if (!canEditTicket(t, req.user!.id)) return res.status(403).json(NOT_ALLOWED);
+  const d = z.object({ phase: z.enum(["start", "move", "end"]), col: z.enum(STATUSES).optional(), index: z.number().int().min(0).max(1000).optional() }).parse(req.body);
+  publish({ type: "drag", projectId: t.projectId, actor: actorOf(req), ticketId: t.id, ...d });
+  res.json({ ok: true });
 }));
 
 router.delete("/tickets/:id", wrap(async (req, res) => {
   const t = await loadTicket(req, res); if (!t) return;
   if (t.reporterId !== req.user!.id) return res.status(403).json({ error: "Only the person who created this ticket can delete it" });
+  const key = withKey(t).key;
   await prisma.ticket.delete({ where: { id: t.id } });
+  publish({ type: "ticket.deleted", projectId: t.projectId, actor: actorOf(req), ticket: { id: t.id, key, title: t.title } });
   res.json({ ok: true });
 }));
 
@@ -326,6 +360,7 @@ router.post("/tickets/:id/comments", wrap(async (req, res) => {
   const t = await loadTicket(req, res); if (!t) return;
   const { body } = commentSchema.parse(req.body);
   const c = await prisma.comment.create({ data: { ticketId: t.id, authorId: req.user!.id, body }, include: { author: { select: userSelect } } });
+  publish({ type: "comment.created", projectId: t.projectId, actor: actorOf(req), ticket: { id: t.id, key: withKey(t).key, title: t.title }, body: body.length > 80 ? body.slice(0, 80) + "…" : body });
   res.status(201).json(c);
 }));
 

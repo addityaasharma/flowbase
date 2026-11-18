@@ -43,3 +43,12 @@ button:active:not(:disabled) { transform: scale(0.98); }
 .anim-pop { animation: pop .22s cubic-bezier(.2,.8,.2,1); }
 .anim-slide { animation: slide .28s cubic-bezier(.2,.8,.2,1); }
 .anim-fade { animation: fade .2s ease-out; }
+@keyframes toast {
+  0% { opacity: 0; transform: translateY(10px) scale(.97); }
+  6% { opacity: 1; transform: none; }
+  90% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(-4px) scale(.98); }
+}
+.anim-toast { animation: toast 5.2s cubic-bezier(.2,.8,.2,1) forwards; }
+@keyframes ghost { 0%, 100% { box-shadow: 0 0 0 2px rgb(74 155 255 / .7), 0 12px 32px rgb(0 0 0 / .10); } 50% { box-shadow: 0 0 0 4px rgb(74 155 255 / .35), 0 12px 32px rgb(0 0 0 / .10); } }
+.anim-ghost { animation: ghost 1.4s ease-in-out infinite; }
