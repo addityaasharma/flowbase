@@ -18,7 +18,15 @@ export const PRIORITY_LABEL: Record<Priority, string> = {
 };
 
 export const loginSchema = z.object({ email: z.string().email(), password: z.string().min(1) });
-export const updateProjectSchema = z.object({ name: z.string().trim().min(1).max(80).optional(), description: z.string().trim().max(500).nullable().optional() });
+const emptyToNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
+export const updateProjectSchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(), description: z.string().trim().max(500).nullable().optional(),
+  repoUrl: z.preprocess(emptyToNull, z.string().trim().max(200).regex(/^https:\/\/github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+?(\.git)?\/?$/, "Use a GitHub repository URL like https://github.com/owner/repo").nullable().optional()),
+  repoBranch: z.preprocess(emptyToNull, z.string().trim().max(60).regex(/^[A-Za-z0-9._\/-]+$/, "Branch names can use letters, numbers and . _ - /").nullable().optional()),
+});
+export const createTokenSchema = z.object({
+  name: z.string().trim().min(1).max(60), expiresInDays: z.union([z.literal(0), z.literal(30), z.literal(90), z.literal(365)]).default(90), canCommentOthers: z.boolean().default(true),
+});
 export const forgotSchema = z.object({ email: z.string().email().max(200) });
 export const resetSchema = z.object({ token: z.string().min(10).max(200), password: z.string().min(8).max(200) });
 export const verifySchema = z.object({ token: z.string().min(10).max(200) });

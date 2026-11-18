@@ -43,6 +43,7 @@ model User {
   tokenVersion  Int             @default(0)   // bumped on password change/reset: signs out every other session
   emailVerifiedAt DateTime?
   authTokens   AuthToken[]
+  apiTokens    ApiToken[]
   createdAt    DateTime        @default(now())
   memberships  ProjectMember[]
   assignedTickets TicketAssignee[]
@@ -59,6 +60,8 @@ model Project {
   name        String
   key         String
   description String?
+  repoUrl     String?         // https://github.com/owner/repo, shown to people and handed to Claude/agents
+  repoBranch  String?
   ticketSeq   Int             @default(0)
   createdAt   DateTime        @default(now())
   members     ProjectMember[]
@@ -109,6 +112,7 @@ model Comment {
   authorId  String
   author    User     @relation(fields: [authorId], references: [id])
   body      String
+  viaAgent  String?  // name of the API token when an agent (e.g. Claude) wrote it on someone's behalf
   parentId  String?
   parent    Comment? @relation("Replies", fields: [parentId], references: [id], onDelete: Cascade)
   replies   Comment[] @relation("Replies")
@@ -124,6 +128,7 @@ model Activity {
   actorId   String
   actor     User     @relation(fields: [actorId], references: [id])
   message   String
+  viaAgent  String?
   createdAt DateTime @default(now())
 }
 
@@ -210,4 +215,21 @@ model Reminder {
   sentAt    DateTime @default(now())
 
   @@unique([ticketId, kind, dueDate])
+}
+
+/// Personal access token for agents (e.g. Claude Code over MCP). Acts as the user, with the same rights as an assigned person.
+model ApiToken {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  prefix           String    // first characters, so the owner can recognise it; the rest is never stored
+  tokenHash        String    @unique
+  canCommentOthers Boolean   @default(true)  // may read + comment on tasks that are not assigned to the user
+  expiresAt        DateTime?
+  lastUsedAt       DateTime?
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([userId])
 }

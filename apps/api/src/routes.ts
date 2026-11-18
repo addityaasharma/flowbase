@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { z } from "zod";
 import {
-  loginSchema, registerSchema, forgotSchema, resetSchema, verifySchema, createProjectSchema, updateProjectSchema, createTicketSchema, updateTicketSchema, moveTicketSchema,
+  loginSchema, registerSchema, forgotSchema, resetSchema, verifySchema, createProjectSchema, updateProjectSchema, createTokenSchema, createTicketSchema, updateTicketSchema, moveTicketSchema,
   commentSchema, inviteSchema, acceptInviteSchema, memberRoleSchema, STATUS_LABEL, PRIORITY_LABEL, type Role, type Status,
 } from "@bitcode/shared";
 import type { Prisma } from "@prisma/client";
@@ -13,6 +13,7 @@ import { rateLimit } from "./rateLimit";
 import { sendAssignmentEmail, sendInviteEmail, sendMentionEmail, sendPasswordResetEmail, sendVerifyEmail } from "./mail";
 import { grant, openStream, publish, revoke } from "./events";
 import { notify, ticketAudience } from "./notifications";
+import { newToken } from "./tokens"; // (routes.ts already has the same sha256 hashToken helper)
 import express from "express";
 import { MAX_UPLOAD_BYTES, saveUpload, serveUpload } from "./uploads";
 import { STATUSES } from "@bitcode/shared";
@@ -247,6 +248,27 @@ router.post("/auth/password", rateLimit("password", 10, 15 * 60_000), wrap(async
   res.json({ ok: true, token: signToken(nu.id, nu.tokenVersion) }); // this device stays signed in; all others are signed out
 }));
 
+// ---------- personal access tokens (for Claude / agents) ----------
+const activeToken = () => ({ revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] });
+router.get("/tokens", wrap(async (req, res) => {
+  res.json(await prisma.apiToken.findMany({ where: { userId: req.user!.id, ...activeToken() }, orderBy: { createdAt: "desc" }, select: { id: true, name: true, prefix: true, canCommentOthers: true, expiresAt: true, lastUsedAt: true, createdAt: true } }));
+}));
+router.post("/tokens", rateLimit("token", 10, 60 * 60_000), wrap(async (req, res) => {
+  if (!(await requireVerified(req, res))) return;
+  const d = createTokenSchema.parse(req.body);
+  if ((await prisma.apiToken.count({ where: { userId: req.user!.id, ...activeToken() } })) >= 10) return res.status(400).json({ error: "You already have 10 active tokens. Revoke one first." });
+  const token = newToken();
+  const row = await prisma.apiToken.create({
+    data: { userId: req.user!.id, name: d.name, prefix: token.slice(0, 11), tokenHash: hashToken(token), canCommentOthers: d.canCommentOthers, expiresAt: d.expiresInDays ? new Date(Date.now() + d.expiresInDays * 864e5) : null },
+    select: { id: true, name: true, prefix: true, canCommentOthers: true, expiresAt: true, createdAt: true },
+  });
+  res.status(201).json({ ...row, token }); // the only time the full token is ever shown
+}));
+router.delete("/tokens/:id", wrap(async (req, res) => {
+  await prisma.apiToken.updateMany({ where: { id: req.params.id, userId: req.user!.id, revokedAt: null }, data: { revokedAt: new Date() } });
+  res.json({ ok: true });
+}));
+
 // ---------- projects ----------
 const projectShape = (p: { members: Parameters<typeof flattenMembers>[0] } & Record<string, unknown>, me: string) => {
   const members = flattenMembers(p.members);
@@ -275,7 +297,12 @@ router.post("/projects", rateLimit("project", 20, 60 * 60_000), wrap(async (req,
 router.patch("/projects/:id", wrap(async (req, res) => {
   if (!(await projectAccess(req, res, req.params.id, ["ADMIN"]))) return;
   const d = updateProjectSchema.parse(req.body);
-  const p = await prisma.project.update({ where: { id: req.params.id }, data: { ...(d.name !== undefined ? { name: d.name } : {}), ...(d.description !== undefined ? { description: d.description || null } : {}) }, select: { id: true, name: true, description: true } });
+  const repoUrl = d.repoUrl === undefined ? undefined : d.repoUrl ? d.repoUrl.replace(/\/$/, "").replace(/\.git$/, "") : null;
+  const p = await prisma.project.update({
+    where: { id: req.params.id },
+    data: { ...(d.name !== undefined ? { name: d.name } : {}), ...(d.description !== undefined ? { description: d.description || null } : {}), ...(repoUrl !== undefined ? { repoUrl } : {}), ...(d.repoBranch !== undefined ? { repoBranch: d.repoBranch } : {}) },
+    select: { id: true, name: true, description: true, repoUrl: true, repoBranch: true },
+  });
   publish({ type: "project.updated", projectId: p.id, actor: actorOf(req), name: p.name });
   res.json(p);
 }));
@@ -381,7 +408,7 @@ router.delete("/invitations/:id", wrap(async (req, res) => {
 }));
 
 // ---------- tickets ----------
-const log = (ticketId: string, actorId: string, message: string) => prisma.activity.create({ data: { ticketId, actorId, message } });
+export const log = (ticketId: string, actorId: string, message: string, viaAgent?: string) => prisma.activity.create({ data: { ticketId, actorId, message, viaAgent: viaAgent ?? null } });
 
 async function assigneesOk(res: Response, projectId: string, ids?: string[]) {
   const unique = [...new Set(ids ?? [])];
@@ -526,24 +553,31 @@ router.delete("/tickets/:id", wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+/** Posts a comment (shared by the web app and by agents). Handles replies, mentions, live events and inbox notifications. */
+export async function postComment(o: { ticket: { id: string; projectId: string; title: string; number: number; project: { key: string } }; user: { id: string; name: string }; body: string; parentId?: string; viaAgent?: string }) {
+  const t = o.ticket;
+  let rootId: string | null = null, replyTo: { authorId: string } | null = null;
+  if (o.parentId) { // replies are one level deep: replying to a reply attaches to the original comment
+    const p = await prisma.comment.findFirst({ where: { id: o.parentId, ticketId: t.id }, select: { id: true, parentId: true, authorId: true } });
+    if (!p) return { ok: false as const, status: 400, error: "The comment you're replying to no longer exists" };
+    rootId = p.parentId ?? p.id; replyTo = p;
+  }
+  const c = await prisma.comment.create({ data: { ticketId: t.id, authorId: o.user.id, body: o.body, parentId: rootId, viaAgent: o.viaAgent ?? null }, include: { author: { select: userSelect } } });
+  const key = `${t.project.key}-${t.number}`, who = o.user, via = o.viaAgent ? ` (via ${o.viaAgent})` : "", excerpt = plainExcerpt(o.body);
+  publish({ type: "comment.created", projectId: t.projectId, actor: who, ticket: { id: t.id, key, title: t.title }, body: excerpt + via, reply: !!rootId });
+  const base = { actor: who, projectId: t.projectId, ticketId: t.id, kind: "comment" };
+  const mentioned = await notifyMentions({ text: o.body, actor: who, projectId: t.projectId, ticketId: t.id, key, title: t.title }).catch((e) => { console.error(e); return [] as string[]; });
+  if (replyTo && replyTo.authorId !== who.id && !mentioned.includes(replyTo.authorId)) void notify({ ...base, userIds: [replyTo.authorId], text: `replied to your comment on ${key}: “${excerpt}”${via}` }).catch(console.error);
+  void ticketAudience(t.id).then((aud) => notify({ ...base, userIds: aud.filter((id) => id !== replyTo?.authorId && !mentioned.includes(id)), text: `${rootId ? "replied" : "commented"} on ${key}: “${excerpt}”${via}` })).catch(console.error);
+  return { ok: true as const, comment: c };
+}
+
 router.post("/tickets/:id/comments", wrap(async (req, res) => {
   const t = await loadTicket(req, res); if (!t) return;
   const { body, parentId } = commentSchema.parse(req.body);
-  // Replies are one level deep: replying to a reply attaches to the original comment.
-  let rootId: string | null = null, replyTo: { authorId: string } | null = null;
-  if (parentId) {
-    const p = await prisma.comment.findFirst({ where: { id: parentId, ticketId: t.id }, select: { id: true, parentId: true, authorId: true } });
-    if (!p) return res.status(400).json({ error: "The comment you're replying to no longer exists" });
-    rootId = p.parentId ?? p.id; replyTo = p;
-  }
-  const c = await prisma.comment.create({ data: { ticketId: t.id, authorId: req.user!.id, body, parentId: rootId }, include: { author: { select: userSelect } } });
-  const key = withKey(t).key, excerpt = plainExcerpt(body), who = actorOf(req);
-  publish({ type: "comment.created", projectId: t.projectId, actor: who, ticket: { id: t.id, key, title: t.title }, body: excerpt, reply: !!rootId });
-  const base = { actor: who, projectId: t.projectId, ticketId: t.id, kind: "comment" };
-  const mentioned = await notifyMentions({ text: body, actor: who, projectId: t.projectId, ticketId: t.id, key, title: t.title }).catch((e) => { console.error(e); return [] as string[]; });
-  if (replyTo && replyTo.authorId !== who.id && !mentioned.includes(replyTo.authorId)) void notify({ ...base, userIds: [replyTo.authorId], text: `replied to your comment on ${key}: “${excerpt}”` }).catch(console.error);
-  void ticketAudience(t.id).then((aud) => notify({ ...base, userIds: aud.filter((id) => id !== replyTo?.authorId && !mentioned.includes(id)), text: `${rootId ? "replied" : "commented"} on ${key}: “${excerpt}”` })).catch(console.error);
-  res.status(201).json(c);
+  const r = await postComment({ ticket: t, user: actorOf(req), body, parentId });
+  if (!r.ok) return res.status(r.status).json({ error: r.error });
+  res.status(201).json(r.comment);
 }));
 
 // ---------- notifications (the bell) ----------

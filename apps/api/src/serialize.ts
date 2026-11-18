@@ -5,7 +5,7 @@ export const userSelect = { id: true, name: true, email: true, title: true, acti
 export const ticketInclude = {
   assignees: { select: { userId: true, user: { select: userSelect } }, orderBy: { assignedAt: "asc" as const } },
   reporter: { select: userSelect },
-  project: { select: { id: true, key: true, name: true } },
+  project: { select: { id: true, key: true, name: true, repoUrl: true, repoBranch: true } },
   _count: { select: { comments: true } },
 } as const;
 

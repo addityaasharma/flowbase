@@ -85,26 +85,30 @@ function PendingInvites({ projectId }: { projectId: string }) {
   );
 }
 
-function ProjectSettings({ project }: { project: { id: string; name: string; description: string | null } }) {
+function ProjectSettings({ project }: { project: { id: string; name: string; description: string | null; repoUrl?: string | null; repoBranch?: string | null } }) {
   const qc = useQueryClient();
   const [name, setName] = useState(project.name);
   const [desc, setDesc] = useState(project.description ?? "");
+  const [repo, setRepo] = useState(project.repoUrl ?? "");
+  const [branch, setBranch] = useState(project.repoBranch ?? "");
   const [saved, setSaved] = useState(false);
   const save = useMutation({
-    mutationFn: () => api(`/projects/${project.id}`, { method: "PATCH", json: { name, description: desc } }),
+    mutationFn: () => api(`/projects/${project.id}`, { method: "PATCH", json: { name, description: desc, repoUrl: repo, repoBranch: branch } }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); setSaved(true); setTimeout(() => setSaved(false), 1800); },
   });
-  const dirty = name.trim() !== project.name || desc.trim() !== (project.description ?? "");
+  const dirty = name.trim() !== project.name || desc.trim() !== (project.description ?? "") || repo.trim() !== (project.repoUrl ?? "") || branch.trim() !== (project.repoBranch ?? "");
   return (
     <section className="rounded-[24px] bg-white p-5 shadow-card">
       <h3 className="mb-3 font-semibold">Project settings</h3>
       <form className="grid gap-3 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); if (dirty && name.trim()) save.mutate(); }}>
         <label className="text-xs font-medium text-slate-500">Name<input className={inputCls + " mt-1"} value={name} maxLength={80} onChange={(e) => setName(e.target.value)} required /></label>
         <label className="text-xs font-medium text-slate-500">Description<input className={inputCls + " mt-1"} value={desc} maxLength={500} placeholder="What is this project about?" onChange={(e) => setDesc(e.target.value)} /></label>
+        <label className="text-xs font-medium text-slate-500">GitHub repository<input className={inputCls + " mt-1"} value={repo} maxLength={200} placeholder="https://github.com/owner/repo" onChange={(e) => setRepo(e.target.value)} /></label>
+        <label className="text-xs font-medium text-slate-500">Default branch<input className={inputCls + " mt-1"} value={branch} maxLength={60} placeholder="main" onChange={(e) => setBranch(e.target.value)} /></label>
         <div className="flex items-center gap-3 sm:col-span-2">
           <button className={btnPrimary} disabled={!dirty || save.isPending}>{saved ? <><Check className="h-4 w-4" />Saved</> : save.isPending ? "Saving…" : "Save changes"}</button>
           {save.error && <span className="text-sm text-rose-600">{(save.error as Error).message}</span>}
-          <span className="text-xs text-slate-400">The ticket prefix ({(project as { key?: string }).key ?? "key"}) can’t be changed.</span>
+          <span className="text-xs text-slate-400">The repo link is shown on tickets and given to Claude/agents so they know where to work.</span>
         </div>
       </form>
     </section>
@@ -156,7 +160,7 @@ export default function Team() {
           </div>
         ))}
       </div>
-      {isAdmin && <ProjectSettings key={project.id + project.name} project={project} />}
+      {isAdmin && <ProjectSettings key={[project.id, project.name, project.description, project.repoUrl, project.repoBranch].join("|")} project={project} />}
       {isAdmin && (
         <section className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-rose-200 bg-rose-50/50 p-5">
           <div><h3 className="font-semibold text-rose-700">Danger zone</h3><p className="text-sm text-slate-600">Deleting this project permanently removes its tickets, comments and members.</p></div>

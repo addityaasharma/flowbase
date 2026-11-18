@@ -3,6 +3,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 import cors from "cors";
 import { ZodError } from "zod";
 import { router } from "./routes";
+import { agentRouter, mcpRouter } from "./agent";
 import { startUploadCleanup } from "./cleanup";
 import { startReminderJob } from "./reminders";
 import { alertError } from "./mail";
@@ -13,6 +14,8 @@ app.use(cors({ origin: process.env.WEB_ORIGIN?.split(",") ?? true }));
 app.use(express.json({ limit: "100kb" }));
 app.get("/health", (_req, res) => res.json({ ok: true }));
 app.get("/api/health", (_req, res) => res.json({ ok: true })); // reachable through nginx for deploy health checks
+app.use("/api/agent", agentRouter);   // personal access tokens (Claude / agents) only
+app.use("/api/mcp", mcpRouter);
 app.use("/api", router);
 
 app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {

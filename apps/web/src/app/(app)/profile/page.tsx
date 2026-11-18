@@ -2,8 +2,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Check, FolderPlus, LogOut, Trash2 } from "lucide-react";
+import { ArrowRight, Bot, Check, FolderPlus, LogOut, Trash2 } from "lucide-react";
 import { DeleteProjectModal } from "@/components/DeleteProjectModal";
+import { DeveloperAccess } from "@/components/DeveloperAccess";
 import type { Project } from "@/lib/types";
 import { api, tokenStore } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -52,6 +53,7 @@ export default function Profile() {
   const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
   const [error, setError] = useState("");
   const [toDelete, setToDelete] = useState<Project | null>(null);
+  const [devOpen, setDevOpen] = useState(false);
   if (!user) return null;
   const dirty = name.trim() !== user.name && name.trim().length > 0;
 
@@ -91,6 +93,12 @@ export default function Profile() {
 
         <ChangePassword />
 
+        <button onClick={() => setDevOpen(true)} className="flex w-full items-center gap-3 rounded-[28px] bg-white p-5 text-left shadow-card transition hover:shadow-lift">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-600"><Bot className="h-5 w-5" /></span>
+          <span className="min-w-0 flex-1"><span className="block font-semibold">Developer access</span><span className="block text-xs text-slate-500">Let Claude Code work on your assigned tasks</span></span>
+          <ArrowRight className="h-4 w-4 text-slate-400" />
+        </button>
+
       </div>
 
       <section className="flex min-h-0 flex-col rounded-[28px] bg-slate-200/50 p-4 lg:h-full">
@@ -124,6 +132,7 @@ export default function Profile() {
           </div>
         </div>
       </section>
+      {devOpen && <DeveloperAccess onClose={() => setDevOpen(false)} />}
       {toDelete && <DeleteProjectModal project={toDelete} onClose={() => setToDelete(null)} />}
     </div>
   );

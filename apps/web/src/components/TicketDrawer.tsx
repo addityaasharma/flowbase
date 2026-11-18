@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { PRIORITIES, PRIORITY_LABEL, STATUSES, STATUS_LABEL } from "@bitcode/shared";
-import { ChevronDown, CornerDownRight, Lock, Pencil, Trash2, X } from "lucide-react";
+import { Bot, Check, ChevronDown, Copy, CornerDownRight, GitBranch, Github, Lock, Pencil, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useWorkspace } from "@/lib/workspace";
@@ -26,6 +26,26 @@ function LabelsEditor({ labels, onChange }: { labels: string[]; onChange: (l: st
       <input value={text} onChange={(e) => (e.target.value.endsWith(",") ? (setText(e.target.value), add()) : setText(e.target.value))}
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} onBlur={add} placeholder={labels.length ? "Add…" : "Add a label"}
         className="min-w-20 flex-1 rounded-full bg-transparent px-2 py-1 text-xs outline-none placeholder:text-slate-400 disabled:hidden" />
+    </div>
+  );
+}
+
+const ViaBadge = ({ name }: { name?: string | null }) => name ? <span title={`Written by an agent using the token “${name}” on this person's behalf`} className="ml-1 inline-flex items-center gap-1 rounded-full bg-violet-50 px-1.5 py-px align-middle text-[10px] font-medium text-violet-700"><Bot className="h-3 w-3" />via {name}</span> : null;
+
+/** Repo link + a suggested branch name to start work from (copy button). */
+function DevBox({ t }: { t: { key: string; title: string; project: { repoUrl?: string | null; repoBranch?: string | null } } }) {
+  const [done, setDone] = useState(false);
+  const branch = `flowbase/${t.key.toLowerCase()}-${t.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)}`.replace(/-$/, "");
+  const repo = t.project.repoUrl;
+  return (
+    <div className="rounded-3xl bg-slate-50 p-5">
+      <Label>Developer</Label>
+      {repo ? <a href={repo} target="_blank" rel="noopener noreferrer" className="mb-2 flex items-center gap-2 truncate text-sm font-medium text-indigo-600 hover:underline"><Github className="h-4 w-4 shrink-0" /><span className="truncate">{repo.replace("https://github.com/", "")}</span></a>
+        : <p className="mb-2 text-xs text-slate-400">No GitHub repo linked yet (a project admin can add one in Team &amp; Roles).</p>}
+      <button type="button" onClick={() => { navigator.clipboard?.writeText(branch); setDone(true); setTimeout(() => setDone(false), 1500); }}
+        className="flex w-full items-center gap-2 rounded-xl bg-white px-3 py-2 text-left font-mono text-xs text-slate-700 ring-1 ring-slate-200 hover:ring-indigo-300" title="Copy branch name">
+        <GitBranch className="h-3.5 w-3.5 shrink-0 text-slate-400" /><span className="min-w-0 flex-1 truncate">{branch}</span>{done ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
+      </button>
     </div>
   );
 }
@@ -73,7 +93,7 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
         <Avatar user={c.author} size={isReply ? 24 : 28} />
         <div className="min-w-0 flex-1">
           <div className={clsx("rounded-2xl border px-4 py-3", tone.soft, tone.border)}>
-            <div className="mb-1 text-xs"><b className={tone.text}>{c.author.name}</b> <span className="text-slate-400">· {fmtTime(c.createdAt)}</span></div>
+            <div className="mb-1 text-xs"><b className={tone.text}>{c.author.name}</b><ViaBadge name={c.viaAgent} /> <span className="text-slate-400">· {fmtTime(c.createdAt)}</span></div>
             <Markdown source={c.body} />
           </div>
           {user && replyTo?.id !== c.id && (
@@ -187,6 +207,8 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                     </fieldset>
                   </div>
 
+                  <DevBox t={t} />
+
                   <section className="px-1">
                     <button type="button" onClick={() => setShowActivity((v) => !v)} aria-expanded={showActivity}
                       className="flex w-full items-center justify-between rounded-xl px-1 py-1 text-sm font-semibold hover:bg-slate-50">
@@ -200,7 +222,7 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                           return (
                             <li key={a.id} className="relative">
                               <span className={clsx("absolute -left-[27px] top-1.5 h-2.5 w-2.5 rounded-full ring-4 ring-white", tone.dot)} />
-                              <p className="text-sm leading-snug"><b className={tone.text}>{a.actor.name}</b> <span className="text-slate-600">{a.message}</span></p>
+                              <p className="text-sm leading-snug"><b className={tone.text}>{a.actor.name}</b><ViaBadge name={a.viaAgent} /> <span className="text-slate-600">{a.message}</span></p>
                               <p className="text-xs text-slate-400">{fmtTime(a.createdAt)}</p>
                             </li>
                           );

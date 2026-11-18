@@ -32,3 +32,25 @@ Without `RESEND_API_KEY` no email is sent; the invite screen shows a copy-able l
 
 ## Deploy
 Pushes to `main` are built and deployed automatically (see `.github/workflows/deploy.yml` and `deploy/DEPLOY.md`).
+
+## Developer access (Claude Code over MCP)
+
+Link a GitHub repo in **Team & Roles → Project settings**, then create a token in **Profile → Developer access**.
+Connect Claude Code (works with a Claude Pro plan):
+
+```bash
+claude mcp add --transport http flowbase https://<your-host>/api/mcp --header "Authorization: Bearer fb_..."
+```
+
+Claude acts as you, but narrower than a login: it can list/read **your assigned tasks** (and, if the token allows, read and comment on
+other tasks in your projects), comment, and move *your* tasks between columns. It can never edit, assign or delete tickets, or touch
+members, projects or settings. Everything it does is labelled "via <token name>". Tokens are revocable, expire (30/90/365 days or never),
+are stored only as a hash, work only on `/api/agent/*` and `/api/mcp`, and are rate-limited (120 requests/minute).
+Tools: `list_projects`, `list_my_tasks`, `get_task`, `comment_on_task`, `set_task_status`. The same actions are available over REST under `/api/agent`.
+
+Claude clones the repo and does the work on *your* machine with *your* git access; Flowbase never stores GitHub credentials.
+
+## Operations
+
+`deploy/backup.sh` (nightly database + uploads, 14 days), `deploy/restore-test.sh`, and `deploy/healthcheck.sh` (cron every 5 minutes, emails
+`ALERT_EMAIL` about downtime, disk, or missing backups). See `deploy/DEPLOY.md`.
