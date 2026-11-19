@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { usePersisted } from "@/lib/persist";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { PRIORITIES, PRIORITY_LABEL, STATUSES, STATUS_LABEL } from "@bitcode/shared";
@@ -41,8 +42,8 @@ function PeoplePicker({ people, value, onChange }: { people: { id: string; name:
 
 /** Checklist inside the ticket, with a progress bar. Only people who can edit the ticket can change it. */
 function Subtasks({ ticketId, items, canEdit, refresh, assignees, userId, onReply, locked }: { locked?: boolean; ticketId: string; items: SubtaskRow[]; canEdit: boolean; refresh: () => void; assignees: { id: string; name: string }[]; userId?: string; onReply: (s: SubtaskRow) => void }) {
-  const [text, setText] = useState("");
-  const [who, setWho] = useState<string[]>([]);
+  const [text, setText] = usePersisted(`ticket:${ticketId}:subtask`, "");
+  const [who, setWho] = usePersisted<string[]>(`ticket:${ticketId}:subtaskWho`, []);
   const [open, setOpen] = useState<string | null>(null); // the subtask whose options are expanded
   const add = useMutation({ mutationFn: (title: string) => api(`/tickets/${ticketId}/subtasks`, { method: "POST", json: { title, assigneeIds: who } }), onSuccess: () => { setText(""); setWho([]); refresh(); } });
   const assign = useMutation({ mutationFn: (v: { id: string; assigneeIds: string[] }) => api(`/subtasks/${v.id}`, { method: "PATCH", json: { assigneeIds: v.assigneeIds } }), onSuccess: refresh });
@@ -179,12 +180,13 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
   const { user, requireAuth } = useAuth();
   const { members, openTicket, toneOf } = useWorkspace();
   const qc = useQueryClient();
-  const [comment, setComment] = useState("");
+  const [comment, setComment] = usePersisted(`ticket:${id}:comment`, "");
   const [showActivity, setShowActivity] = useState(false);
-  const [editingDesc, setEditingDesc] = useState(false);
-  const [descDraft, setDescDraft] = useState("");
-  const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
-  const [replyText, setReplyText] = useState("");
+  const [editingDesc, setEditingDesc] = usePersisted(`ticket:${id}:editingDesc`, false);
+  const [descDraft, setDescDraft] = usePersisted(`ticket:${id}:descDraft`, "");
+  const [replyTo, setReplyTo] = usePersisted<{ id: string; name: string } | null>(`ticket:${id}:replyTo`, null);
+  const [replyText, setReplyText] = usePersisted(`ticket:${id}:replyText`, "");
+  const seenId = useRef(id);
   const q = useQuery({ queryKey: ["ticket", id], queryFn: () => api<TicketDetail>(`/tickets/${id}`), refetchInterval: 30000 }); // live updates arrive over the event stream; this is a safety net
   const refresh = () => { qc.invalidateQueries({ queryKey: ["ticket", id] }); qc.invalidateQueries({ queryKey: ["tickets"] }); };
   const patch = useMutation({ mutationFn: (json: object) => api(`/tickets/${id}`, { method: "PATCH", json }), onSuccess: refresh });
@@ -197,7 +199,10 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
     onSuccess: () => { setReplyTo(null); setReplyText(""); refresh(); },
   });
   const del = useMutation({ mutationFn: () => api(`/tickets/${id}`, { method: "DELETE" }), onSuccess: () => { qc.invalidateQueries({ queryKey: ["tickets"] }); openTicket(null); } });
-  useEffect(() => { setEditingDesc(false); setShowActivity(false); setComment(""); setReplyTo(null); setReplyText(""); }, [id]);
+  useEffect(() => { // switching to another ticket resets the drafts (the first run is just a refresh, which keeps them)
+    if (seenId.current === id) return;
+    seenId.current = id; setEditingDesc(false); setShowActivity(false); setComment(""); setReplyTo(null); setReplyText("");
+  }, [id]);
 
   const t = q.data;
   const canDelete = !!user && !!t && t.reporter.id === user.id;                                                   // only the creator can delete

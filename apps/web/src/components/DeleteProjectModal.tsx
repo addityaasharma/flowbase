@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { usePersisted } from "@/lib/persist";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import { api } from "@/lib/api";
@@ -11,7 +11,7 @@ import { Modal, btnGhost, inputCls } from "./Bits";
 export function DeleteProjectModal({ project, onClose }: { project: Project; onClose: () => void }) {
   const qc = useQueryClient();
   const { notify } = useRealtime();
-  const [typed, setTyped] = useState("");
+  const [typed, setTyped] = usePersisted("deleteProject:typed", "");
   const del = useMutation({
     mutationFn: () => api(`/projects/${project.id}`, { method: "DELETE" }),
     onSuccess: async () => {

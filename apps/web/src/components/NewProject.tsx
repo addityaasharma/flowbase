@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { usePersisted } from "@/lib/persist";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
@@ -13,10 +13,10 @@ const suggestKey = (name: string) => {
 export function NewProject({ onClose }: { onClose: () => void }) {
   const { setProjectId } = useWorkspace();
   const qc = useQueryClient();
-  const [name, setName] = useState("");
-  const [key, setKey] = useState("");
-  const [keyTouched, setKeyTouched] = useState(false);
-  const [description, setDescription] = useState("");
+  const [name, setName] = usePersisted("newProject:name", "");
+  const [key, setKey] = usePersisted("newProject:key", "");
+  const [keyTouched, setKeyTouched] = usePersisted("newProject:keyTouched", false);
+  const [description, setDescription] = usePersisted("newProject:description", "");
   const m = useMutation({
     mutationFn: () => api<{ id: string }>("/projects", { method: "POST", json: { name, key, description: description || undefined } }),
     onSuccess: async (p) => { await qc.invalidateQueries({ queryKey: ["projects"] }); setProjectId(p.id); onClose(); },

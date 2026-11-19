@@ -6,6 +6,7 @@ import { api } from "./api";
 import { useAuth } from "./auth";
 import type { Project, Ticket, User } from "./types";
 import type { Priority } from "@bitcode/shared";
+import { clearDrafts, usePersisted } from "./persist";
 import { assignTones, toneByHash, type Tone } from "./tones";
 
 export type Filters = { q: string; priorities: Priority[]; label: string; due: "" | "overdue" | "week" | "none"; mine: boolean };
@@ -39,9 +40,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [assignee, setAssignee] = useState("all");
   const [listStatus, setListStatus] = useState("");
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
-  const [openId, openTicket] = useState<string | null>(null);
-  const [raise, setRaise] = useState(false);
-  const [newProject, setNewProject] = useState(false);
+  // open popups survive a refresh, together with what was typed in them
+  const [openId, setOpenId] = usePersisted<string | null>("openTicket", null, true);
+  const [raise, setRaiseRaw] = usePersisted("raise", false, true);
+  const [newProject, setNewProjectRaw] = usePersisted("newProject", false, true);
+  const openTicket = useCallback((id: string | null) => { setOpenId((cur) => { if (cur !== id) clearDrafts("ticket:"); return id; }); }, [setOpenId]);
+  const setRaise = useCallback((v: boolean) => { if (!v) clearDrafts("raise:"); setRaiseRaw(v); }, [setRaiseRaw]);
+  const setNewProject = useCallback((v: boolean) => { if (!v) clearDrafts("newProject:"); setNewProjectRaw(v); }, [setNewProjectRaw]);
 
   // queries are per signed-in user: a different account must never see cached data from the previous one
   const goToTicket = useCallback(async (id: string) => {

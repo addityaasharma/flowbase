@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { clearDrafts, usePersisted } from "@/lib/persist";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, Check, Copy, KeyRound, Trash2 } from "lucide-react";
 import { API_BASE, api } from "@/lib/api";
@@ -25,10 +26,10 @@ function CopyBox({ text, label, prose }: { text: string; label: string; prose?: 
 /** Create/revoke personal access tokens and show how to connect Claude Code. */
 export function DeveloperAccess({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
-  const [name, setName] = useState("Claude Code");
-  const [days, setDays] = useState<0 | 30 | 90 | 365>(90);
-  const [others, setOthers] = useState(true);
-  const [level, setLevel] = useState<"tasks" | "collaborator" | "full">("collaborator");
+  const [name, setName] = usePersisted("dev:name", "Claude Code");
+  const [days, setDays] = usePersisted<0 | 30 | 90 | 365>("dev:days", 90);
+  const [others, setOthers] = usePersisted("dev:others", true);
+  const [level, setLevel] = usePersisted<"tasks" | "collaborator" | "full">("dev:level", "collaborator");
   const [created, setCreated] = useState<Created | null>(null);
   const list = useQuery({ queryKey: ["tokens"], queryFn: () => api<ApiTokenRow[]>("/tokens") });
   const create = useMutation({

@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { clearDrafts, usePersisted } from "@/lib/persist";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Bot, Check, ChevronDown, FolderPlus, LogOut, Trash2 } from "lucide-react";
@@ -59,8 +60,10 @@ export default function Profile() {
   const [name, setName] = useState(user?.name ?? "");
   const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
   const [error, setError] = useState("");
-  const [toDelete, setToDelete] = useState<Project | null>(null);
-  const [devOpen, setDevOpen] = useState(false);
+  const [toDeleteId, setToDeleteId] = usePersisted<string | null>("profile:deleteProject", null, true);
+  const toDelete = projects.find((p) => p.id === toDeleteId) ?? null;
+  const setToDelete = (p: Project | null) => { if (!p) clearDrafts("deleteProject:"); setToDeleteId(p?.id ?? null); };
+  const [devOpen, setDevOpen] = usePersisted("profile:dev", false, true);
   const theme = useTheme();
   if (!user) return null;
   const dirty = name.trim() !== user.name && name.trim().length > 0;
@@ -156,7 +159,7 @@ export default function Profile() {
           </div>
         </div>
       </section>
-      {devOpen && <DeveloperAccess onClose={() => setDevOpen(false)} />}
+      {devOpen && <DeveloperAccess onClose={() => { clearDrafts("dev:"); setDevOpen(false); }} />}
       {toDelete && <DeleteProjectModal project={toDelete} onClose={() => setToDelete(null)} />}
     </div>
   );

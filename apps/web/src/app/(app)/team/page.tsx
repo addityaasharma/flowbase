@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { clearDrafts, usePersisted } from "@/lib/persist";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ROLES, type Role } from "@bitcode/shared";
 import { Check, Copy, Mail, Trash2, UserPlus } from "lucide-react";
@@ -32,7 +33,7 @@ function InviteResultCard({ r }: { r: InviteResult }) {
 function InviteModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const { project } = useWorkspace();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = usePersisted("invite:email", "");
   const m = useMutation({
     // new people always join as members; a project admin can change the role afterwards
     mutationFn: () => api<InviteResult>("/invitations", { method: "POST", json: { email, role: "MEMBER", projectId: project!.id } }),
@@ -120,8 +121,8 @@ export default function Team() {
   const { project, members, myRole, canManage } = useWorkspace();
   const { isOnline } = useRealtime();
   const qc = useQueryClient();
-  const [inviting, setInviting] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [inviting, setInviting] = usePersisted("team:inviting", false, true);
+  const [deleting, setDeleting] = usePersisted("team:deleting", false, true);
   const isAdmin = myRole === "ADMIN";
   const refresh = () => qc.invalidateQueries({ queryKey: ["projects"] });
   const setRole = useMutation({
@@ -167,7 +168,7 @@ export default function Team() {
           <button className="inline-flex items-center gap-2 rounded-full border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4" />Delete project</button>
         </section>
       )}
-      {inviting && <InviteModal onClose={() => setInviting(false)} />}
+      {inviting && <InviteModal onClose={() => { clearDrafts("invite:"); setInviting(false); }} />}
       {deleting && <DeleteProjectModal project={project} onClose={() => setDeleting(false)} />}
     </div>
   );

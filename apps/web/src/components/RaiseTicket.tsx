@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { usePersisted } from "@/lib/persist";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { PRIORITIES, PRIORITY_LABEL, STATUSES, STATUS_LABEL, TYPES } from "@bitcode/shared";
 import { api } from "@/lib/api";
@@ -11,8 +11,8 @@ import { RichEditor } from "./RichEditor";
 export function RaiseTicket({ onClose }: { onClose: () => void }) {
   const { project, members } = useWorkspace();
   const qc = useQueryClient();
-  const [f, setF] = useState({ title: "", description: "", type: "TASK", priority: "MEDIUM", status: "TODO", dueDate: "", labels: "" });
-  const [assignees, setAssignees] = useState<string[]>([]);
+  const [f, setF] = usePersisted("raise:form", { title: "", description: "", type: "TASK", priority: "MEDIUM", status: "TODO", dueDate: "", labels: "" });
+  const [assignees, setAssignees] = usePersisted<string[]>("raise:assignees", []);
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
   const m = useMutation({
     mutationFn: () => api("/tickets", { method: "POST", json: {
