@@ -88,6 +88,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [user, hasProject, path, router, w]);
+  const onlineCount = w.members.filter((m) => rt.isOnline(m.id)).length; // shown on the Teams tab on phones
   const empty = !loading && (!user || (w.projectsLoaded && !w.project)); // guest, or signed in with no project yet
 
   return (
@@ -116,6 +117,9 @@ function Shell({ children }: { children: React.ReactNode }) {
               <Link key={href} href={href} className={clsx("flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition sm:flex-none sm:px-4",
                 path === href ? "bg-white text-slate-900 shadow-card" : "text-slate-600 hover:text-slate-900")}>
                 <I className="h-4 w-4" /><span className="sm:hidden">{short}</span><span className="hidden sm:inline">{label}</span>
+                {href === "/team" && rt.connected && onlineCount > 0 && (
+                  <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-px text-[11px] font-semibold text-emerald-700 sm:hidden" title={`${onlineCount} online now`}><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{onlineCount}</span>
+                )}
               </Link>
             ))}
           </nav>}
