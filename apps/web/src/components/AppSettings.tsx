@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { BellRing, Download, Smartphone } from "lucide-react";
-import { api } from "@/lib/api";
 import { currentSubscription, disablePush, enablePush, isIos, isStandalone, pushSupported, useInstall } from "@/lib/pwa";
 import { btnGhost, btnPrimary } from "./Bits";
 
@@ -49,7 +48,6 @@ export function AppSettings() {
             {on ? (
               <>
                 <span className="flex items-center gap-1.5 text-sm font-medium text-emerald-700"><BellRing className="h-4 w-4" />Notifications are on</span>
-                <button type="button" className={btnGhost} disabled={busy} onClick={() => run(async () => { const r = await api<{ sent: number }>("/push/test", { method: "POST" }); if (!r.sent) throw new Error("Nothing was sent. Try turning notifications off and on again."); }, "Test sent. It should appear in a moment.")}>Send a test</button>
                 <button type="button" className={btnGhost} disabled={busy} onClick={() => run(async () => { await disablePush(); setOn(false); }, "Notifications are off on this device.")}>Turn off</button>
               </>
             ) : (
