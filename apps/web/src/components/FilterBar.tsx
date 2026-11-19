@@ -7,7 +7,7 @@ import { NO_FILTERS, filtersActive, useWorkspace } from "@/lib/workspace";
 
 /** Search + filters for the board and the ticket list. Everything happens in the browser, so results update as you type. */
 export function FilterBar() {
-  const { filters: f, setFilters, allLabels, tickets, totalCount } = useWorkspace();
+  const { filters: f, setFilters, allLabels, tickets, totalCount, assignee, setAssignee, project } = useWorkspace();
   const input = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false); // phones: the filter chips are hidden until "Filters" is pressed
   useEffect(() => { const focus = () => input.current?.focus(); window.addEventListener("flowbase:search", focus); return () => window.removeEventListener("flowbase:search", focus); }, []);
@@ -23,8 +23,12 @@ export function FilterBar() {
             placeholder="Search tickets…  ( / )" className="w-full rounded-full bg-slate-200/70 py-1.5 pl-9 pr-8 text-sm outline-none placeholder:text-slate-400 focus:bg-white focus:ring-4 focus:ring-indigo-500/15" />
           {f.q && <button aria-label="Clear search" onClick={() => set({ q: "" })} className="absolute right-2 top-1.5 rounded-full p-0.5 text-slate-400 hover:text-slate-700"><X className="h-4 w-4" /></button>}
         </div>
-        <button onClick={() => setOpen((v) => !v)} aria-expanded={open} className={clsx("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium md:hidden", open || filtersActive(f) ? "bg-indigo-600 text-white" : "bg-slate-200/70 text-slate-600")}><SlidersHorizontal className="h-3.5 w-3.5" />Filters</button>
+        <button onClick={() => setOpen((v) => !v)} aria-expanded={open} className={clsx("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium md:hidden", open || filtersActive(f) || assignee !== "all" ? "bg-indigo-600 text-white" : "bg-slate-200/70 text-slate-600")}><SlidersHorizontal className="h-3.5 w-3.5" />Filters</button>
         <div className={clsx("w-full flex-wrap items-center gap-2 md:flex md:w-auto", open ? "flex" : "hidden")}>
+        <select className={sel + " sm:hidden"} value={assignee} onChange={(e) => setAssignee(e.target.value)} aria-label="Assignee">
+          <option value="all">Everyone ({project?.members.length ?? 0})</option><option value="unassigned">Unassigned</option>
+          {project?.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
         <div className="flex items-center gap-1">
           {PRIORITIES.map((p) => (
             <button key={p} onClick={() => toggle(p)} aria-pressed={f.priorities.includes(p)}
@@ -38,9 +42,9 @@ export function FilterBar() {
           <option value="">Any due date</option><option value="overdue">Overdue</option><option value="week">Due this week</option><option value="none">No due date</option>
         </select>
         <button onClick={() => set({ mine: !f.mine })} aria-pressed={f.mine} className={clsx("rounded-full px-3 py-1.5 text-xs font-medium transition", f.mine ? "bg-indigo-600 text-white" : "bg-slate-200/70 text-slate-600 hover:bg-slate-200")}>Assigned to me</button>
-        {filtersActive(f) && (
+        {(filtersActive(f) || assignee !== "all") && (
           <>
-            <button onClick={() => setFilters(NO_FILTERS)} className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50"><X className="h-3 w-3" />Clear</button>
+            <button onClick={() => { setFilters(NO_FILTERS); setAssignee("all"); }} className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50"><X className="h-3 w-3" />Clear</button>
             <span className="text-xs text-slate-500">Showing {tickets.length} of {totalCount}</span>
           </>
         )}

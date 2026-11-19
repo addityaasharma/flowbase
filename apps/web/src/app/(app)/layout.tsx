@@ -124,7 +124,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           <div className="flex w-full items-center justify-between gap-2 sm:flex-wrap sm:gap-3">
             <div className="flex min-w-0 items-center gap-2 sm:flex-wrap sm:gap-3">
             {hasProject && <>
-            <select className="max-w-[6.4rem] truncate rounded-full bg-slate-200/70 px-3 py-2 text-sm font-medium outline-none hover:bg-slate-200 sm:max-w-none sm:px-4" value={w.assignee} onChange={(e) => w.setAssignee(e.target.value)}>
+            <select className="max-sm:hidden max-w-[6.4rem] truncate rounded-full bg-slate-200/70 px-3 py-2 text-sm font-medium outline-none hover:bg-slate-200 sm:max-w-none sm:px-4" value={w.assignee} onChange={(e) => w.setAssignee(e.target.value)}>
               <option value="all">Everyone ({w.project?.members.length ?? 0})</option>
               <option value="unassigned">Unassigned</option>
               {w.project?.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
