@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
-import { BellRing, Download, Smartphone } from "lucide-react";
+import { BellRing, Download, Smartphone, Volume2, VolumeX } from "lucide-react";
 import { currentSubscription, disablePush, enablePush, isIos, isStandalone, pushSupported, useInstall } from "@/lib/pwa";
+import { beep, setSoundEnabled, soundEnabled } from "@/lib/realtime";
 import { btnGhost, btnPrimary } from "./Bits";
 
 /** Profile card: install Flowbase as an app, and turn on notifications that arrive even when it is closed. */
@@ -9,13 +10,14 @@ export function AppSettings() {
   const { canInstall, install } = useInstall();
   const [on, setOn] = useState(false);
   const [ready, setReady] = useState(false);
+  const [sound, setSound] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [perm, setPerm] = useState<NotificationPermission | "none">("none");
   const supported = ready && pushSupported();
   const iosNeedsInstall = ready && isIos() && !isStandalone(); // iPhone/iPad only allow push for apps added to the Home Screen
   useEffect(() => {
-    setReady(true);
+    setReady(true); setSound(soundEnabled());
     if (pushSupported()) { setPerm(Notification.permission); currentSubscription().then((s) => setOn(!!s && Notification.permission === "granted")).catch(() => {}); }
   }, []);
   const run = async (fn: () => Promise<void>, ok?: string) => {
@@ -53,6 +55,12 @@ export function AppSettings() {
             ) : (
               <button type="button" className={btnPrimary} disabled={busy || perm === "denied"} onClick={() => run(async () => { await enablePush(); setOn(true); }, "Notifications are on.")}><BellRing className="h-4 w-4" />Turn on notifications</button>
             )}
+          </div>
+        )}
+        {ready && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="flex items-center gap-1.5 text-sm font-medium text-slate-700">{sound ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}Beep on live notifications: {sound ? "on" : "off"}</span>
+            <button type="button" className={btnGhost} onClick={() => { const n = !sound; setSound(n); setSoundEnabled(n); if (n) beep(); }}>{sound ? "Turn off" : "Turn on"}</button>
           </div>
         )}
         {perm === "denied" && !on && <p className="text-xs text-rose-600">Notifications are blocked for this site. Allow them in your browser’s site settings, then reload.</p>}

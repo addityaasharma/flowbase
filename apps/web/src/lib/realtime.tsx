@@ -28,6 +28,30 @@ const TOAST_MS = 5200;
 const DRAG_STALE_MS = 12000; // drop a remote drag we haven't heard about (their tab closed mid-drag)
 let toastSeq = 0;
 
+/** Short soft beep for live notifications (Web Audio, no asset). Silent if the browser blocks audio before any interaction. */
+let audioCtx: AudioContext | null = null;
+const SOUND_KEY = "flowbase.sound";
+/** Per-device preference; on by default. */
+export function soundEnabled() { try { return localStorage.getItem(SOUND_KEY) !== "off"; } catch { return true; } }
+export function setSoundEnabled(on: boolean) { try { localStorage.setItem(SOUND_KEY, on ? "on" : "off"); } catch { /* ignore */ } }
+export function beep() {
+  try {
+    const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return;
+    audioCtx ||= new AC();
+    const ctx = audioCtx;
+    if (ctx.state === "suspended") void ctx.resume();
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = "sine"; o.frequency.value = 880;
+    const t = ctx.currentTime;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.12, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    o.connect(g).connect(ctx.destination);
+    o.start(t); o.stop(t + 0.2);
+  } catch { /* audio unavailable */ }
+}
+
 type Ev = {
   type?: string; projectId: string; actor: { id: string; name: string };
   ticket?: { id: string; key: string; title: string; status?: Status; position?: number };
@@ -51,6 +75,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   const dismiss = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
   const toast = useCallback((kind: ToastKind, actor: { id: string; name: string } | null, text: string, ticketId?: string) => {
     const id = ++toastSeq;
+    if (kind !== "denied" && soundEnabled()) beep();
     setToasts((t) => [...t.slice(-3), { id, kind, actor, text, ticketId }]); // at most 4 on screen
     setTimeout(() => dismiss(id), TOAST_MS);
   }, [dismiss]);
