@@ -15,9 +15,27 @@ const BULLET = /^\s*[-*]\s+(?!\[[ xX]\])/, NUMBER = /^\s*\d+\.\s+/, TASK = /^\s*
  * Markdown editor: toolbar (bold, italic, bullets, numbers, checklist, code, link, image), Enter continues lists,
  * paste or drop images to upload them, Write/Preview tabs. Ctrl/Cmd+Enter calls onSubmit, Ctrl/Cmd+B / I format.
  */
-export function RichEditor({ value, onChange, placeholder, rows = 4, onSubmit, autoFocus }: {
+const MENTION = /@\[([^\]]+)\]\(u:([a-z0-9]+)\)/g;
+const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+export function RichEditor({ value: srcValue, onChange: onSource, placeholder, rows = 4, onSubmit, autoFocus }: {
   value: string; onChange: (v: string) => void; placeholder?: string; rows?: number; onSubmit?: () => void; autoFocus?: boolean;
 }) {
+  // The stored text has mentions as "@[Name](u:id)". While typing, people see just "@Name": the editor shows the plain form and
+  // turns it back into the stored form for the parent (and the preview). `known` remembers which name belongs to which person.
+  const known = useRef(new Map<string, string>());
+  const toDisplay = (src: string) => src.replace(MENTION, (_m, n: string, id: string) => { known.current.set(n, id); return `@${n}`; });
+  const toSource = (txt: string) => {
+    let out = txt;
+    for (const [name, id] of [...known.current].sort((a, b) => b[0].length - a[0].length))
+      out = out.replace(new RegExp(`(^|[\\s(])@${esc(name)}(?=$|[\\s.,;:!?)\\]])`, "g"), (_m, pre: string) => `${pre}@[${name}](u:${id})`);
+    return out;
+  };
+  const [value, setText] = useState(() => toDisplay(srcValue));
+  const onChange = (t: string) => { setText(t); onSource(toSource(t)); };
+  // the parent changed the text itself (cleared after sending, a prefilled reply): show it
+  useEffect(() => { if (srcValue !== toSource(value)) setText(toDisplay(srcValue)); // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [srcValue]);
   const ref = useRef<HTMLTextAreaElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const valueRef = useRef(value); valueRef.current = value;
@@ -38,7 +56,7 @@ export function RichEditor({ value, onChange, placeholder, rows = 4, onSubmit, a
   const matches = mention ? members.filter((m) => m.name.toLowerCase().includes(mention.query.toLowerCase())).slice(0, 6) : [];
   const pick = (m: { id: string; name: string }) => {
     if (!mention) return;
-    const v = valueRef.current, caret = ref.current?.selectionStart ?? v.length, ins = `@[${m.name}](u:${m.id}) `;
+    const v = valueRef.current, caret = ref.current?.selectionStart ?? v.length, ins = `@${m.name} `; known.current.set(m.name, m.id);
     setMention(null); commit(v.slice(0, mention.at) + ins + v.slice(caret), mention.at + ins.length);
   };
   // focus with the caret AFTER any existing text (e.g. a prefilled "@Name "), not at the start
@@ -147,7 +165,7 @@ export function RichEditor({ value, onChange, placeholder, rows = 4, onSubmit, a
           onDrop={(e) => { e.preventDefault(); setDrag(false); upload([...e.dataTransfer.files]); }}
           className="block w-full resize-y bg-transparent px-3.5 py-2.5 text-sm outline-none placeholder:text-slate-400" />
       ) : (
-        <div className="min-h-20 px-3.5 py-2.5">{value.trim() ? <Markdown source={value} /> : <p className="text-sm text-slate-400">Nothing to preview yet</p>}</div>
+        <div className="min-h-20 px-3.5 py-2.5">{value.trim() ? <Markdown source={toSource(value)} /> : <p className="text-sm text-slate-400">Nothing to preview yet</p>}</div>
       )}
       {tab === "write" && mention && matches.length > 0 && (
         <ul role="listbox" aria-label="Mention someone" className="border-t border-black/5 bg-white p-1">
