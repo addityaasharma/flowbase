@@ -71,8 +71,8 @@ function PendingInvites({ projectId }: { projectId: string }) {
       <h3 className="text-sm font-semibold text-slate-600">Pending invitations ({q.data.length})</h3>
       <div className="divide-y divide-slate-100 rounded-[24px] bg-white shadow-card">
         {q.data.map((p) => (
-          <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm">
-            <div><div className="font-medium">{p.email}</div><div className="text-xs text-slate-500">invited by {p.invitedBy.name} · expires {new Date(p.expiresAt).toLocaleDateString()}</div></div>
+          <div key={p.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 text-sm sm:px-5">
+            <div className="min-w-0"><div className="break-all font-medium">{p.email}</div><div className="text-xs text-slate-500">invited by {p.invitedBy.name} · expires {new Date(p.expiresAt).toLocaleDateString()}</div></div>
             <div className="flex gap-3 text-xs font-medium">
               <button className="text-indigo-600 hover:underline" disabled={resend.isPending} onClick={() => resend.mutate(p)}>Resend</button>
               <button className="text-slate-500 hover:text-rose-600" onClick={() => revoke.mutate(p.id)}>Revoke</button>
@@ -98,17 +98,17 @@ function ProjectSettings({ project }: { project: { id: string; name: string; des
   });
   const dirty = name.trim() !== project.name || desc.trim() !== (project.description ?? "") || repo.trim() !== (project.repoUrl ?? "") || branch.trim() !== (project.repoBranch ?? "");
   return (
-    <section className="rounded-[24px] bg-white p-5 shadow-card">
+    <section className="min-w-0 rounded-[24px] bg-white p-4 shadow-card sm:p-5">
       <h3 className="mb-3 font-semibold">Project settings</h3>
-      <form className="grid gap-3 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); if (dirty && name.trim()) save.mutate(); }}>
+      <form className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); if (dirty && name.trim()) save.mutate(); }}>
         <label className="text-xs font-medium text-slate-500">Name<input className={inputCls + " mt-1"} value={name} maxLength={80} onChange={(e) => setName(e.target.value)} required /></label>
         <label className="text-xs font-medium text-slate-500">Description<input className={inputCls + " mt-1"} value={desc} maxLength={500} placeholder="What is this project about?" onChange={(e) => setDesc(e.target.value)} /></label>
         <label className="text-xs font-medium text-slate-500">GitHub repository<input className={inputCls + " mt-1"} value={repo} maxLength={200} placeholder="https://github.com/owner/repo" onChange={(e) => setRepo(e.target.value)} /></label>
         <label className="text-xs font-medium text-slate-500">Default branch<input className={inputCls + " mt-1"} value={branch} maxLength={60} placeholder="main" onChange={(e) => setBranch(e.target.value)} /></label>
-        <div className="flex items-center gap-3 sm:col-span-2">
+        <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
           <button className={btnPrimary} disabled={!dirty || save.isPending}>{saved ? <><Check className="h-4 w-4" />Saved</> : save.isPending ? "Saving…" : "Save changes"}</button>
           {save.error && <span className="text-sm text-rose-600">{(save.error as Error).message}</span>}
-          <span className="text-xs text-slate-400">This is the project’s default repo. People working on a task can also attach their own repo to it from the ticket.</span>
+          <span className="min-w-0 text-xs text-slate-400">This is the project’s default repo. People working on a task can also attach their own repo to it from the ticket.</span>
         </div>
       </form>
     </section>
@@ -136,20 +136,20 @@ export default function Team() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold tracking-tight">Team & Roles ({members.length})</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="min-w-0 text-xl font-semibold tracking-tight sm:text-2xl">Team & Roles ({members.length})</h2>
         {canManage && <button className={btnPrimary} onClick={() => setInviting(true)}><UserPlus className="h-4 w-4" />Add member</button>}
       </div>
       {canManage && <PendingInvites projectId={project.id} />}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
         {members.map((u) => (
-          <div key={u.id} className="flex items-center gap-4 rounded-[24px] bg-white p-5 shadow-card transition hover:shadow-lift">
+          <div key={u.id} className="flex min-w-0 items-center gap-3 rounded-[24px] bg-white p-4 shadow-card sm:gap-4 sm:p-5 transition hover:shadow-lift">
             <span className="relative shrink-0"><Avatar user={u} size={48} />{isOnline(u.id) && <span title="Online" className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500" />}</span>
             <div className="min-w-0 flex-1">
               <div className="truncate font-bold">{u.name}{u.id === user?.id && <span className="ml-1.5 text-xs font-normal text-slate-400">(you)</span>}</div>
               <div className="truncate text-sm text-slate-500">{u.email}</div>
             </div>
-            <div className="flex flex-col items-end gap-1">
+            <div className="flex shrink-0 flex-col items-end gap-1">
               {isAdmin ? (
                 <select className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-900" value={u.role} onChange={(e) => setRole.mutate({ id: u.id, role: e.target.value as Role })}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select>
               ) : <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">{u.role}</span>}
