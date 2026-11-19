@@ -149,13 +149,13 @@ export default function Team() {
               <div className="truncate font-bold">{u.name}{u.id === user?.id && <span className="ml-1.5 text-xs font-normal text-slate-400">(you)</span>}</div>
               <div className="truncate text-sm text-slate-500">{u.email}</div>
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-1">
+            <div className="flex shrink-0 flex-col items-end gap-2.5">
               {isAdmin ? (
                 <select className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-900" value={u.role} onChange={(e) => setRole.mutate({ id: u.id, role: e.target.value as Role })}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select>
-              ) : <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">{u.role}</span>}
+              ) : <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{u.role}</span>}
               {u.id === user?.id
-                ? <button className="text-xs text-slate-500 hover:text-rose-600" onClick={() => confirm("Leave this project?") && remove.mutate(u.id)}>Leave</button>
-                : isAdmin && <button className="text-xs text-slate-500 hover:text-rose-600" onClick={() => confirm(`Remove ${u.name} from this project?`) && remove.mutate(u.id)}>Remove</button>}
+                ? <button className="rounded-full border border-rose-200 px-4 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 active:bg-rose-100" onClick={() => confirm("Leave this project?") && remove.mutate(u.id)}>Leave</button>
+                : isAdmin && <button className="rounded-full border border-rose-200 px-4 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 active:bg-rose-100" onClick={() => confirm(`Remove ${u.name} from this project?`) && remove.mutate(u.id)}>Remove</button>}
             </div>
           </div>
         ))}
