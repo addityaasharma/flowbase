@@ -13,6 +13,7 @@ const CSS = `
 @keyframes tour-ring { 0%,100% { transform: rotate(0); } 10%,30% { transform: rotate(18deg); } 20%,40% { transform: rotate(-18deg); } 50% { transform: rotate(0); } }
 @keyframes tour-pop { 0% { opacity: 0; transform: translateY(8px) scale(.96); } 15%,85% { opacity: 1; transform: none; } 100% { opacity: 0; } }
 @keyframes tour-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes tour-line { 0% { opacity: 0; transform: translateX(-6px); } 4% { opacity: 1; transform: none; } 88% { opacity: 1; } 96%,100% { opacity: 0; } }
 .tour-step { animation: tour-in .35s ease both; }
 @media (prefers-reduced-motion: reduce) { .tour-step, .tour-anim { animation: none !important; } }
 `;
@@ -75,11 +76,33 @@ function BlockedArt() {
   );
 }
 
+function ClaudeArt() {
+  const lines: [string, string][] = [
+    ["text-slate-400", "$ claude"],
+    ["text-sky-300", "> What are my tasks?"],
+    ["text-slate-200", "SAD-2  Website Improvement · In Progress"],
+    ["text-sky-300", "> Start on SAD-2"],
+    ["text-slate-200", "↳ branch sad-2-website-improvement"],
+    ["text-emerald-300", "✓ Moved to In Review · via Claude"],
+  ];
+  return (
+    <div className="flex h-full items-center justify-center px-5">
+      <div className="w-full max-w-[330px] rounded-2xl bg-slate-900 p-3.5 font-mono text-[11px] leading-[1.7] shadow-lift">
+        <div className="mb-1.5 flex gap-1.5"><span className="h-2 w-2 rounded-full bg-rose-400" /><span className="h-2 w-2 rounded-full bg-amber-400" /><span className="h-2 w-2 rounded-full bg-emerald-400" /></div>
+        {lines.map(([tone, text], i) => (
+          <div key={i} className={clsx("tour-anim truncate", tone)} style={{ animation: "tour-line 9s ease infinite", animationDelay: `${i * 1.1}s`, opacity: 0 }}>{text}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const STEPS: { title: string; text: string; art: () => React.ReactElement }[] = [
   { title: "Your board", art: BoardArt, text: "Every task is a card in a column: To Do, In Progress, In Review, Blocked and Done. Drag a card to move it. On a phone, press and hold a card and pick where it goes." },
   { title: "Raise a ticket", art: RaiseArt, text: "Press Raise (or the round + on a phone) to add a task. Give it a title, a priority and a due date, and assign it to one or more people." },
   { title: "Subtasks and reminders", art: SubtaskArt, text: "Break a task into subtasks. Each can be assigned to several people and only they can tick it or change its status. The bell emails them a reminder, once." },
   { title: "Comments and mentions", art: CommentArt, text: "Discuss in the comments, reply to a comment, or type @ to mention a teammate. They get a notification and an email." },
+  { title: "Work with Claude", art: ClaudeArt, text: "On a computer, open Profile › Developer access and connect Claude Code. It can then list your tasks, create a branch, comment and move your tasks for you. Anything it does is labelled “via Claude”." },
   { title: "Blocked tasks", art: BlockedArt, text: "A blocked task is frozen: you can comment, but nothing else changes until it is unblocked. If it is also overdue, only the person who created it can unblock it or move the date." },
 ];
 
