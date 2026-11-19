@@ -173,7 +173,7 @@ function Column({ status, count, width, onResizeStart, children }: { status: Sta
           <span className={clsx("h-2.5 w-2.5 rounded-full", STATUS_DOT[status])} />{!mini && STATUS_LABEL[status].toUpperCase()}</h2>
         <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-slate-600 shadow-card">{count}</span>
       </header>
-      <div ref={setNodeRef} data-col={status} data-perrow={mini ? 0 : Math.max(1, Math.floor((px - 24 + 12) / (CARD_MIN + 12)))} className="-mx-1 min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pt-3">{children(px)}</div>
+      <div ref={setNodeRef} data-col={status} data-perrow={mini ? 0 : Math.max(1, Math.floor((px - 24 + 12) / (CARD_MIN + 12)))} className="-mx-1 min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-1 pt-3">{children(px)}</div>
       {onResizeStart && <div onPointerDown={onResizeStart} title="Drag to resize · double-click to reset" className="group/h absolute -right-4 top-0 z-10 hidden h-full w-4 cursor-col-resize touch-none items-center justify-center sm:flex"><span className="h-12 w-1 rounded-full bg-slate-300 opacity-0 transition group-hover/h:opacity-100" /></div>}
     </section>
   );
@@ -213,7 +213,7 @@ export function Board() {
   };
   const resetWidths = () => { setWidths({}); saveWidths({}); };
   const [mobile, setMobile] = useState(false);
-  useEffect(() => { const m = window.matchMedia("(max-width: 639px)"); const f = () => setMobile(m.matches); f(); m.addEventListener("change", f); return () => m.removeEventListener("change", f); }, []);
+  useEffect(() => { const m = window.matchMedia("(max-width: 639px), (pointer: coarse)"); const f = () => setMobile(m.matches); f(); m.addEventListener("change", f); return () => m.removeEventListener("change", f); }, []);
   const [menuFor, setMenuFor] = useState<Ticket | null>(null); // phone: the card whose "Move to" menu is open
   const targetRef = useRef<{ col: Status; index: number } | null>(null);
   // Local optimistic move: applied in the same render as the drop, so the real card is already in its new slot
