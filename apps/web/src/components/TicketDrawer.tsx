@@ -18,15 +18,20 @@ const SUB_TONE = { TODO: "bg-slate-100 text-slate-600", IN_PROGRESS: "bg-sky-100
 
 /** Multi-select of people (a compact dropdown with checkboxes). */
 function PeoplePicker({ people, value, onChange }: { people: { id: string; name: string }[]; value: string[]; onChange: (ids: string[]) => void }) {
-  const names = people.filter((p) => value.includes(p.id)).map((p) => p.name.split(" ")[0]);
+  const picked = people.filter((p) => value.includes(p.id));
   return (
-    <details className="relative">
-      <summary className="max-w-[8rem] cursor-pointer list-none truncate rounded-full bg-slate-100 px-2.5 py-1 text-[11px] text-slate-600 hover:bg-slate-200">{names.length ? names.join(", ") : "Anyone"}</summary>
-      <div className="absolute right-0 z-20 mt-1 w-48 rounded-xl bg-white p-1.5 shadow-lift ring-1 ring-slate-200">
-        {people.length === 0 && <p className="px-2 py-1 text-xs text-slate-400">Assign people to the ticket first</p>}
+    <details className="group/p relative">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-full bg-slate-100 py-1 pl-1.5 pr-3 text-xs font-medium text-slate-600 transition hover:bg-slate-200 [&::-webkit-details-marker]:hidden">
+        {picked.length > 0 ? (
+          <span className="flex -space-x-1.5">{picked.slice(0, 3).map((p) => <span key={p.id} title={p.name} className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-semibold text-indigo-700 ring-2 ring-slate-100">{p.name[0]?.toUpperCase()}</span>)}</span>
+        ) : <span className="flex h-5 w-5 items-center justify-center rounded-full border border-dashed border-slate-400 text-slate-400">+</span>}
+        <span className="max-w-[9rem] truncate">{picked.length ? picked.map((p) => p.name.split(" ")[0]).join(", ") : "Assign"}</span>
+      </summary>
+      <div className="absolute left-0 z-20 mt-1.5 w-56 rounded-2xl bg-white p-1.5 shadow-lift ring-1 ring-slate-200">
+        {people.length === 0 && <p className="px-2.5 py-1.5 text-xs text-slate-400">Assign people to the ticket first</p>}
         {people.map((p) => (
-          <label key={p.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-slate-50">
-            <input type="checkbox" checked={value.includes(p.id)} onChange={(e) => onChange(e.target.checked ? [...value, p.id] : value.filter((x) => x !== p.id))} />{p.name}
+          <label key={p.id} className="flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm hover:bg-slate-50">
+            <input type="checkbox" className="h-4 w-4 accent-indigo-600" checked={value.includes(p.id)} onChange={(e) => onChange(e.target.checked ? [...value, p.id] : value.filter((x) => x !== p.id))} />{p.name}
           </label>
         ))}
       </div>
@@ -47,37 +52,44 @@ function Subtasks({ ticketId, items, canEdit, refresh, assignees, userId, onRepl
   if (!items.length && !canEdit) return null;
   return (
     <section>
-      <div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-semibold">Subtasks {items.length > 0 && <span className="font-normal text-slate-400">({done}/{items.length})</span>}</h3></div>
-      {items.length > 0 && <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{ width: `${(done / items.length) * 100}%` }} /></div>}
-      <ul className="space-y-1">
+      <div className="mb-2 flex items-center justify-between"><h3 className="text-base font-semibold">Subtasks {items.length > 0 && <span className="font-normal text-slate-400">({done}/{items.length})</span>}</h3></div>
+      {items.length > 0 && <div className="mb-4 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{ width: `${(done / items.length) * 100}%` }} /></div>}
+      <ul className="space-y-2">
         {items.map((s) => {
           const mine = s.assigneeIds.length ? !!userId && s.assigneeIds.includes(userId) : canEdit; // only the assigned person ticks it
           const owners = assignees.filter((a) => s.assigneeIds.includes(a.id));
+          const icon = "flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-slate-100";
           return (
-          <li key={s.id} className="group flex items-center gap-2.5 rounded-xl px-2 py-1.5 hover:bg-slate-50">
-            <button type="button" disabled={!mine} title={mine ? undefined : owners.length ? `Only ${owners.map((o) => o.name).join(", ")} can check this` : undefined} aria-label={s.done ? "Mark as not done" : "Mark as done"} onClick={() => toggle.mutate({ id: s.id, status: s.done ? "TODO" : "DONE" })}
-              className={clsx("flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md border-2 transition", s.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 hover:border-indigo-400", !mine && "cursor-not-allowed opacity-50")}>{s.done && <Check className="h-3 w-3" strokeWidth={3} />}</button>
-            <span className={clsx("min-w-0 flex-1 break-words text-sm", s.done && "text-slate-400 line-through")}>{s.title}</span>
-            <select disabled={!mine} value={s.status} onChange={(e) => toggle.mutate({ id: s.id, status: e.target.value as SubtaskRow["status"] })} aria-label="Subtask status" title={mine ? undefined : "Only the assignees can change the status"}
-              className={clsx("rounded-full px-2 py-0.5 text-[11px] font-medium outline-none disabled:opacity-60", SUB_TONE[s.status])}>
-              {(Object.keys(SUB_LABEL) as SubtaskRow["status"][]).map((k) => <option key={k} value={k}>{SUB_LABEL[k]}</option>)}
-            </select>
-            {canEdit ? <PeoplePicker people={assignees} value={s.assigneeIds} onChange={(ids) => assign.mutate({ id: s.id, assigneeIds: ids })} />
-              : owners.length > 0 && <span className="max-w-[9rem] truncate rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{owners.map((o) => o.name).join(", ")}</span>}
-            {canEdit && !s.done && s.assigneeIds.length > 0 && (
-              <button type="button" disabled={!!s.remindedAt || remind.isPending} onClick={() => remind.mutate(s.id)} aria-label="Send reminder email" title={s.remindedAt ? "Reminder already sent" : "Email the assignees a reminder (once)"}
-                className={clsx("transition", s.remindedAt ? "cursor-not-allowed text-amber-400" : "text-slate-300 hover:text-amber-500")}><Bell className="h-4 w-4" fill={s.remindedAt ? "currentColor" : "none"} /></button>
-            )}
-            {userId && <button type="button" aria-label="Reply to this subtask" title="Reply in comments" onClick={() => onReply(s)} className="text-slate-300 hover:text-indigo-600"><CornerDownRight className="h-4 w-4" /></button>}
-            {canEdit && <button type="button" aria-label="Remove subtask" onClick={() => remove.mutate(s.id)} className="hidden text-slate-300 hover:text-rose-600 group-hover:block"><X className="h-4 w-4" /></button>}
+          <li key={s.id} className={clsx("rounded-2xl p-3.5 ring-1 transition", s.done ? "bg-slate-50/60 ring-slate-100" : "bg-white ring-slate-200 hover:ring-indigo-200")}>
+            <div className="flex items-start gap-3">
+              <button type="button" disabled={!mine} title={mine ? undefined : owners.length ? `Only ${owners.map((o) => o.name).join(", ")} can check this` : undefined} aria-label={s.done ? "Mark as not done" : "Mark as done"} onClick={() => toggle.mutate({ id: s.id, status: s.done ? "TODO" : "DONE" })}
+                className={clsx("mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border-2 transition", s.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 hover:border-indigo-400", !mine && "cursor-not-allowed opacity-50")}>{s.done && <Check className="h-4 w-4" strokeWidth={3} />}</button>
+              <span className={clsx("min-w-0 flex-1 break-words text-[15px] font-medium leading-6", s.done ? "text-slate-400 line-through" : "text-slate-800")}>{s.title}</span>
+              <div className="-mr-1 -mt-1 flex shrink-0 items-center">
+                {canEdit && !s.done && s.assigneeIds.length > 0 && (
+                  <button type="button" disabled={!!s.remindedAt || remind.isPending} onClick={() => remind.mutate(s.id)} aria-label="Send reminder email" title={s.remindedAt ? "Reminder already sent" : "Email the assignees a reminder (once)"}
+                    className={clsx(icon, s.remindedAt ? "cursor-not-allowed text-amber-500" : "text-slate-400 hover:text-amber-500")}><Bell className="h-[18px] w-[18px]" fill={s.remindedAt ? "currentColor" : "none"} /></button>
+                )}
+                {userId && <button type="button" aria-label="Reply to this subtask" title="Reply in comments" onClick={() => onReply(s)} className={clsx(icon, "text-slate-400 hover:text-indigo-600")}><CornerDownRight className="h-[18px] w-[18px]" /></button>}
+                {canEdit && <button type="button" aria-label="Remove subtask" title="Remove" onClick={() => remove.mutate(s.id)} className={clsx(icon, "text-slate-400 hover:text-rose-600")}><X className="h-[18px] w-[18px]" /></button>}
+              </div>
+            </div>
+            <div className="mt-2.5 flex flex-wrap items-center gap-2 pl-9">
+              <select disabled={!mine} value={s.status} onChange={(e) => toggle.mutate({ id: s.id, status: e.target.value as SubtaskRow["status"] })} aria-label="Subtask status" title={mine ? undefined : "Only the assignees can change the status"}
+                className={clsx("cursor-pointer rounded-full px-3 py-1 text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:opacity-60", SUB_TONE[s.status])}>
+                {(Object.keys(SUB_LABEL) as SubtaskRow["status"][]).map((k) => <option key={k} value={k}>{SUB_LABEL[k]}</option>)}
+              </select>
+              {canEdit ? <PeoplePicker people={assignees} value={s.assigneeIds} onChange={(ids) => assign.mutate({ id: s.id, assigneeIds: ids })} />
+                : <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">{owners.length ? owners.map((o) => o.name).join(", ") : "Anyone"}</span>}
+            </div>
           </li>
         );})}
       </ul>
       {canEdit && (
-        <form className="mt-2 flex gap-1.5" onSubmit={(e) => { e.preventDefault(); if (text.trim() && !add.isPending) add.mutate(text.trim()); }}>
-          <input value={text} maxLength={200} onChange={(e) => setText(e.target.value)} placeholder="Add a subtask and press Enter" className="min-w-0 flex-1 rounded-xl bg-slate-100 px-3.5 py-2 text-sm outline-none placeholder:text-slate-400 focus:bg-white focus:ring-4 focus:ring-indigo-500/15" />
-          <PeoplePicker people={assignees} value={who} onChange={setWho} />
-          {add.error && <p className="mt-1 text-xs text-rose-600">{(add.error as Error).message}</p>}
+        <form className="mt-3 rounded-2xl bg-slate-50 p-3" onSubmit={(e) => { e.preventDefault(); if (text.trim() && !add.isPending) add.mutate(text.trim()); }}>
+          <input value={text} maxLength={200} onChange={(e) => setText(e.target.value)} placeholder="Add a subtask and press Enter" className="w-full rounded-xl bg-white px-4 py-2.5 text-[15px] outline-none ring-1 ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-400" />
+          <div className="mt-2 flex items-center gap-2"><span className="text-xs text-slate-400">Assign to</span><PeoplePicker people={assignees} value={who} onChange={setWho} /></div>
+          {add.error && <p className="mt-1.5 text-xs text-rose-600">{(add.error as Error).message}</p>}
         </form>
       )}
     </section>
