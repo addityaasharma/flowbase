@@ -13,6 +13,7 @@ import { NewProject } from "@/components/NewProject";
 import { SignInPopover } from "@/components/SignInPopover";
 import { Toasts } from "@/components/Toasts";
 import { FlowbaseMark } from "@/components/Logo";
+import { WelcomeTour } from "@/components/WelcomeTour";
 import { NotificationBell } from "@/components/NotificationBell";
 import { OnlinePill } from "@/components/OnlinePill";
 import { VerifyBanner } from "@/components/VerifyBanner";
@@ -185,6 +186,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <main className="min-h-0 w-full flex-1 overflow-y-auto"><div className="mx-auto h-full max-w-[1600px] px-4 pb-6 pt-4 sm:px-6 sm:pt-5">{loading ? null : empty && !(user && path === "/profile") ? <Welcome /> : children}</div></main>
       {help && <ShortcutsHelp onClose={() => setHelp(false)} />}
       <SignInPopover />
+      <WelcomeTour />
       <Toasts />
       {w.newProject && <NewProject onClose={() => w.setNewProject(false)} />}
       {w.raise && <RaiseTicket onClose={() => w.setRaise(false)} />}

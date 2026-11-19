@@ -42,6 +42,7 @@ model User {
   active       Boolean         @default(true)
   tokenVersion  Int             @default(0)   // bumped on password change/reset: signs out every other session
   emailVerifiedAt DateTime?
+  tourSeenAt   DateTime?                       // the welcome tour was shown (finished or skipped): never offered again
   authTokens   AuthToken[]
   apiTokens    ApiToken[]
   ticketRepos  TicketRepo[]

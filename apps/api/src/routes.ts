@@ -85,8 +85,8 @@ async function projectAccess(req: Request, res: Response, projectId: string, all
 }
 
 // ================= public: auth + invitation lookup =================
-type UserRow = { id: string; name: string; email: string; title: string | null; active: boolean; emailVerifiedAt: Date | null };
-const publicUser = (u: UserRow) => ({ id: u.id, name: u.name, email: u.email, title: u.title, active: u.active, emailVerified: !!u.emailVerifiedAt });
+type UserRow = { id: string; name: string; email: string; title: string | null; active: boolean; emailVerifiedAt: Date | null; tourSeenAt?: Date | null };
+const publicUser = (u: UserRow) => ({ id: u.id, name: u.name, email: u.email, title: u.title, active: u.active, emailVerified: !!u.emailVerifiedAt, tourSeen: u.tourSeenAt === undefined ? true : !!u.tourSeenAt });
 
 /** Creates a one-time emailed link (only its hash is stored) and invalidates earlier unused ones of the same kind. */
 async function issueAuthToken(userId: string, kind: "reset" | "verify", ttlMs: number) {
@@ -214,6 +214,12 @@ router.use(requireAuth);
 
 router.get("/auth/me", wrap(async (req, res) => {
   res.json(publicUser((await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id } }))));
+}));
+
+// the welcome tour was finished or skipped: remember it once, for good (all devices)
+router.post("/auth/tour-seen", wrap(async (req, res) => {
+  await prisma.user.updateMany({ where: { id: req.user!.id, tourSeenAt: null }, data: { tourSeenAt: new Date() } });
+  res.json({ ok: true });
 }));
 
 router.post("/auth/resend-verification", rateLimit("resendverify", 3, 60 * 60_000), wrap(async (req, res) => {

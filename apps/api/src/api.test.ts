@@ -115,6 +115,12 @@ describe("who can change a ticket", () => {
     expect(r2.parentId).toBe(c1.id);
     expect((await api().post(`/api/tickets/${bobs.id}/comments`).set(auth(alice.token)).send({ body: "x", parentId: c1.id })).status).toBe(400);
   });
+  it("the welcome tour is offered to new sign-ups once", async () => {
+    const eve = await signUp("Eve");
+    expect((await api().get("/api/auth/me").set(auth(eve.token))).body.tourSeen).toBe(false);
+    expect((await api().post("/api/auth/tour-seen").set(auth(eve.token))).status).toBe(200);
+    expect((await api().get("/api/auth/me").set(auth(eve.token))).body.tourSeen).toBe(true);
+  });
   it("overdue + blocked: only the creator can unblock it or change the date", async () => {
     const t = (await api().post("/api/tickets").set(auth(alice.token)).send({ projectId, title: "Late", assigneeIds: [bob.id] })).body;
     expect((await api().patch(`/api/tickets/${t.id}`).set(auth(alice.token)).send({ status: "BLOCKED", dueDate: "2020-01-01" })).status).toBe(200);

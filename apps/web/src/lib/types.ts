@@ -1,6 +1,6 @@
 import type { Priority, Role, Status, TicketType } from "@bitcode/shared";
 
-export type User = { id: string; name: string; email: string; title: string | null; active: boolean; role?: Role; emailVerified?: boolean }; // role = role inside the current project
+export type User = { id: string; name: string; email: string; title: string | null; active: boolean; role?: Role; emailVerified?: boolean; tourSeen?: boolean }; // role = role inside the current project
 export type Project = { id: string; name: string; key: string; description: string | null; repoUrl?: string | null; repoBranch?: string | null; members: User[]; myRole: Role; _count: { tickets: number } };
 export type Ticket = {
   id: string; key: string; number: number; title: string; description: string | null;
