@@ -115,6 +115,15 @@ describe("who can change a ticket", () => {
     expect(r2.parentId).toBe(c1.id);
     expect((await api().post(`/api/tickets/${bobs.id}/comments`).set(auth(alice.token)).send({ body: "x", parentId: c1.id })).status).toBe(400);
   });
+  it("overdue + blocked: only the creator can unblock it or change the date", async () => {
+    const t = (await api().post("/api/tickets").set(auth(alice.token)).send({ projectId, title: "Late", assigneeIds: [bob.id] })).body;
+    expect((await api().patch(`/api/tickets/${t.id}`).set(auth(alice.token)).send({ status: "BLOCKED", dueDate: "2020-01-01" })).status).toBe(200);
+    expect((await api().patch(`/api/tickets/${t.id}`).set(auth(bob.token)).send({ status: "IN_PROGRESS" })).status).toBe(403);
+    expect((await api().patch(`/api/tickets/${t.id}`).set(auth(bob.token)).send({ dueDate: "2030-01-01" })).status).toBe(403);
+    expect((await api().post(`/api/tickets/${t.id}/move`).set(auth(bob.token)).send({ status: "TODO" })).status).toBe(403);
+    expect((await api().patch(`/api/tickets/${t.id}`).set(auth(bob.token)).send({ priority: "HIGH" })).status).toBe(200); // other edits are fine
+    expect((await api().post(`/api/tickets/${t.id}/move`).set(auth(alice.token)).send({ status: "IN_PROGRESS" })).status).toBe(200);
+  });
   it("subtask assignees: only they can tick it, the bell works once", async () => {
     const mk = (b: object) => api().post(`/api/tickets/${bobs.id}/subtasks`).set(auth(alice.token)).send(b);
     expect((await mk({ title: "outsider", assigneeIds: [cara.id] })).status).toBe(400); // not on the ticket

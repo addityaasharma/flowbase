@@ -197,6 +197,7 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
 
   const t = q.data;
   const canDelete = !!user && !!t && t.reporter.id === user.id;                                                   // only the creator can delete
+  const frozen = !!t && !!user && t.status === "BLOCKED" && !!t.dueDate && t.dueDate.slice(0, 10) < new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10) && t.reporter.id !== user.id; // overdue + blocked: only the creator may unblock / re-date
   const canEdit = !!user && !!t && (t.reporter.id === user.id || t.assignees.some((a) => a.id === user.id));     // an assignee or the creator; others can comment
   const sendReply = () => { if (replyTo && replyText.trim() && !reply.isPending) reply.mutate({ parentId: replyTo.id, body: replyText }); };
   const startReply = (c: Comment, isReply: boolean) => { setReplyTo({ id: c.id, name: c.author.name }); setReplyText(isReply ? `@[${c.author.name}](u:${c.author.id}) ` : ""); };
@@ -317,15 +318,16 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                 {/* ---------- side column ---------- */}
                 <div className="min-w-0 space-y-5 p-8 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-slate-100 lg:pl-6">
                   <div className="rounded-3xl bg-slate-50 p-5">
+                    {frozen && <p className="mb-3 flex items-start gap-2 rounded-2xl bg-rose-50 px-3.5 py-2.5 text-xs text-rose-700"><Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />Overdue and blocked. Only {t.reporter.name}, who created this task, can unblock it or change its due date.</p>}
                     <fieldset disabled={!canEdit} className="m-0 min-w-0 space-y-4 border-0 p-0">
                       <div><Label>Status</Label>
-                        <select className={inputCls + " bg-white"} value={t.status} onChange={(e) => patch.mutate({ status: e.target.value })}>{STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}</select></div>
+                        <select disabled={frozen} className={inputCls + " bg-white disabled:opacity-60"} value={t.status} onChange={(e) => patch.mutate({ status: e.target.value })}>{STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}</select></div>
                       <div><Label>Priority</Label>
                         <select className={inputCls + " bg-white"} value={t.priority} onChange={(e) => patch.mutate({ priority: e.target.value })}>{PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>)}</select></div>
                       <div><Label>Assigned to · {t.assignees.length} {t.assignees.length === 1 ? "person" : "people"}</Label>
                         <AssigneePicker members={members} value={t.assignees.map((a) => a.id)} disabled={!canEdit} onChange={(ids) => patch.mutate({ assigneeIds: ids })} /></div>
                       <div><Label>Due date</Label>
-                        <input type="date" className={inputCls + " bg-white"} value={t.dueDate?.slice(0, 10) ?? ""} onChange={(e) => patch.mutate({ dueDate: e.target.value || null })} /></div>
+                        <input type="date" disabled={frozen} className={inputCls + " bg-white disabled:opacity-60"} value={t.dueDate?.slice(0, 10) ?? ""} onChange={(e) => patch.mutate({ dueDate: e.target.value || null })} /></div>
                       <div><Label>Labels</Label><LabelsEditor labels={t.labels} onChange={(labels) => patch.mutate({ labels })} /></div>
                     </fieldset>
                   </div>

@@ -1,3 +1,4 @@
+import { OVERDUE_LOCK_MSG, overdueBlocked } from "./lock";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { resolveToken, type Agent } from "./tokens";
 import { z } from "zod";
@@ -101,6 +102,7 @@ export const tools = {
     const { t, assigned } = await loadTicket(a, args.task);
     if (!assigned) throw new AgentError(403, "Only tasks assigned to you can be moved. You can still comment on this one.");
     if (t.status === status) return { ok: true, task: keyOf(t), status, unchanged: true };
+    if (overdueBlocked(t) && t.reporterId !== a.user.id) throw new AgentError(403, OVERDUE_LOCK_MSG);
     const last = await prisma.ticket.findFirst({ where: { projectId: t.projectId, status }, orderBy: { position: "desc" }, select: { position: true } });
     const pos = (last?.position ?? 0) + 1000;
     await prisma.ticket.update({ where: { id: t.id }, data: { status, position: pos } });

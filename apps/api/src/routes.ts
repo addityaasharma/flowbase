@@ -10,6 +10,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { requireAuth, signToken } from "./auth";
 import { rateLimit } from "./rateLimit";
+import { OVERDUE_LOCK_MSG, overdueBlocked } from "./lock";
 import { sendAssignmentEmail, sendInviteEmail, sendMentionEmail, sendPasswordResetEmail, sendSubtaskReminderEmail, sendVerifyEmail } from "./mail";
 import { grant, openStream, publish, revoke } from "./events";
 import { notify, ticketAudience } from "./notifications";
@@ -483,6 +484,7 @@ router.patch("/tickets/:id", wrap(async (req, res) => {
   const t = await loadTicket(req, res); if (!t) return;
   if (!canEditTicket(t, req.user!.id)) return res.status(403).json(NOT_ALLOWED);
   const d = updateTicketSchema.parse(req.body);
+  if (overdueBlocked(t) && t.reporterId !== req.user!.id && ((d.status !== undefined && d.status !== t.status) || d.dueDate !== undefined)) return res.status(403).json({ error: OVERDUE_LOCK_MSG });
   if (!(await assigneesOk(res, t.projectId, d.assigneeIds))) return;
   const { dueDate, assigneeIds, ...rest } = d;
   const ops: Prisma.PrismaPromise<unknown>[] = [prisma.ticket.update({ where: { id: t.id }, data: { ...rest, ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}) } })];
@@ -518,6 +520,7 @@ router.post("/tickets/:id/move", wrap(async (req, res) => {
   const t = await loadTicket(req, res); if (!t) return;
   if (!canEditTicket(t, req.user!.id)) return res.status(403).json(NOT_ALLOWED);
   const { status, beforeId, afterId } = moveTicketSchema.parse(req.body);
+  if (overdueBlocked(t) && t.reporterId !== req.user!.id && status !== t.status) return res.status(403).json({ error: OVERDUE_LOCK_MSG });
   const [before, after] = await Promise.all([
     beforeId ? prisma.ticket.findFirst({ where: { id: beforeId, projectId: t.projectId }, select: { position: true } }) : null,
     afterId ? prisma.ticket.findFirst({ where: { id: afterId, projectId: t.projectId }, select: { position: true } }) : null,
