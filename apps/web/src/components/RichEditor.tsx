@@ -7,6 +7,7 @@ import { uploadImage } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { Avatar } from "./Bits";
 import { Markdown } from "./Markdown";
+import { imageSrc } from "@/lib/markdown";
 
 const MAX = 5 * 1024 * 1024;
 const BULLET = /^\s*[-*]\s+(?!\[[ xX]\])/, NUMBER = /^\s*\d+\.\s+/, TASK = /^\s*[-*]\s+\[[ xX]\]\s+/;
@@ -16,6 +17,7 @@ const BULLET = /^\s*[-*]\s+(?!\[[ xX]\])/, NUMBER = /^\s*\d+\.\s+/, TASK = /^\s*
  * paste or drop images to upload them, Write/Preview tabs. Ctrl/Cmd+Enter calls onSubmit, Ctrl/Cmd+B / I format.
  */
 const MENTION = /@\[([^\]]+)\]\(u:([a-z0-9]+)\)/g;
+const IMAGE = /!\[([^\]]*)\]\((\/api\/uploads\/[a-f0-9]{32}\.(?:png|jpg|gif|webp))\)/g;
 const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export function RichEditor({ value: srcValue, onChange: onSource, placeholder, rows = 4, onSubmit, autoFocus }: {
@@ -24,13 +26,24 @@ export function RichEditor({ value: srcValue, onChange: onSource, placeholder, r
   // The stored text has mentions as "@[Name](u:id)". While typing, people see just "@Name": the editor shows the plain form and
   // turns it back into the stored form for the parent (and the preview). `known` remembers which name belongs to which person.
   const known = useRef(new Map<string, string>());
-  const toDisplay = (src: string) => src.replace(MENTION, (_m, n: string, id: string) => { known.current.set(n, id); return `@${n}`; });
+  // Uploaded images look the same way: the box shows a short "🖼 name" and a thumbnail appears underneath; the stored text keeps ![name](/api/uploads/…).
+  const pics = useRef(new Map<string, string>()); // shown token -> stored markdown
+  const toDisplay = (src: string) => src
+    .replace(MENTION, (_m, n: string, id: string) => { known.current.set(n, id); return `@${n}`; })
+    .replace(IMAGE, (md: string, alt: string) => {
+      for (const [t, m] of pics.current) if (m === md) return t;
+      const base = `🖼 ${alt || "image"}`; let token = base, n = 2;
+      while (pics.current.has(token)) token = `${base} (${n++})`;
+      pics.current.set(token, md); return token;
+    });
   const toSource = (txt: string) => {
     let out = txt;
     for (const [name, id] of [...known.current].sort((a, b) => b[0].length - a[0].length))
       out = out.replace(new RegExp(`(^|[\\s(])@${esc(name)}(?=$|[\\s.,;:!?)\\]])`, "g"), (_m, pre: string) => `${pre}@[${name}](u:${id})`);
+    for (const [token, md] of [...pics.current].sort((a, b) => b[0].length - a[0].length)) out = out.split(token).join(md);
     return out;
   };
+  const removePic = (token: string) => onChange(valueRef.current.replace(`${token}\n`, "").replace(token, ""));
   const [value, setText] = useState(() => toDisplay(srcValue));
   const onChange = (t: string) => { setText(t); onSource(toSource(t)); };
   // the parent changed the text itself (cleared after sending, a prefilled reply): show it
@@ -88,7 +101,8 @@ export function RichEditor({ value: srcValue, onChange: onSource, placeholder, r
     const ins = `[${text}](https://)`, urlStart = s + text.length + 3;
     commit(v.slice(0, s) + ins + v.slice(e), urlStart, urlStart + 8);
   };
-  const insert = (text: string) => {
+  const insert = (raw: string) => {
+    const text = toDisplay(raw); // a pasted image becomes its short "🖼 name" form right away
     const v = valueRef.current, pos = selRef.current ?? v.length;
     onChange(v.slice(0, pos) + text + v.slice(pos)); selRef.current = pos + text.length;
   };
@@ -166,6 +180,19 @@ export function RichEditor({ value: srcValue, onChange: onSource, placeholder, r
           className="block w-full resize-y bg-transparent px-3.5 py-2.5 text-sm outline-none placeholder:text-slate-400" />
       ) : (
         <div className="min-h-20 px-3.5 py-2.5">{value.trim() ? <Markdown source={toSource(value)} /> : <p className="text-sm text-slate-400">Nothing to preview yet</p>}</div>
+      )}
+      {tab === "write" && [...pics.current].some(([t]) => value.includes(t)) && (
+        <div className="flex flex-wrap gap-2 border-t border-black/5 px-3.5 py-2">
+          {[...pics.current].filter(([t]) => value.includes(t)).map(([t, md]) => {
+            const src = imageSrc(/\(([^)]+)\)/.exec(md)?.[1] ?? "");
+            return src ? (
+              <span key={t} className="group relative">
+                <img src={src} alt="" title={t.replace("🖼 ", "")} className="h-16 w-16 rounded-xl object-cover ring-1 ring-black/10" />
+                <button type="button" aria-label="Remove image" onClick={() => removePic(t)} className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-700 text-xs leading-none text-white shadow hover:bg-rose-600">×</button>
+              </span>
+            ) : null;
+          })}
+        </div>
       )}
       {tab === "write" && mention && matches.length > 0 && (
         <ul role="listbox" aria-label="Mention someone" className="border-t border-black/5 bg-white p-1">
