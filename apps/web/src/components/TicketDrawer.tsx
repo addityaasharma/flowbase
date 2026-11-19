@@ -13,6 +13,9 @@ import { AssigneePicker, Avatar, PriorityPill, StatusPill, TypeIcon, btnGhost, b
 import { Markdown } from "./Markdown";
 import { RichEditor } from "./RichEditor";
 
+const SUB_LABEL = { TODO: "To do", IN_PROGRESS: "In progress", REVIEW: "Review", DONE: "Done" } as const;
+const SUB_TONE = { TODO: "bg-slate-100 text-slate-600", IN_PROGRESS: "bg-sky-100 text-sky-700", REVIEW: "bg-amber-100 text-amber-700", DONE: "bg-emerald-100 text-emerald-700" } as const;
+
 /** Multi-select of people (a compact dropdown with checkboxes). */
 function PeoplePicker({ people, value, onChange }: { people: { id: string; name: string }[]; value: string[]; onChange: (ids: string[]) => void }) {
   const names = people.filter((p) => value.includes(p.id)).map((p) => p.name.split(" ")[0]);
@@ -37,7 +40,7 @@ function Subtasks({ ticketId, items, canEdit, refresh, assignees, userId, onRepl
   const [who, setWho] = useState<string[]>([]);
   const add = useMutation({ mutationFn: (title: string) => api(`/tickets/${ticketId}/subtasks`, { method: "POST", json: { title, assigneeIds: who } }), onSuccess: () => { setText(""); setWho([]); refresh(); } });
   const assign = useMutation({ mutationFn: (v: { id: string; assigneeIds: string[] }) => api(`/subtasks/${v.id}`, { method: "PATCH", json: { assigneeIds: v.assigneeIds } }), onSuccess: refresh });
-  const toggle = useMutation({ mutationFn: (v: { id: string; done: boolean }) => api(`/subtasks/${v.id}`, { method: "PATCH", json: { done: v.done } }), onSuccess: refresh });
+  const toggle = useMutation({ mutationFn: (v: { id: string; status: SubtaskRow["status"] }) => api(`/subtasks/${v.id}`, { method: "PATCH", json: { status: v.status } }), onSuccess: refresh });
   const remind = useMutation({ mutationFn: (id: string) => api(`/subtasks/${id}/remind`, { method: "POST" }), onSuccess: refresh });
   const remove = useMutation({ mutationFn: (id: string) => api(`/subtasks/${id}`, { method: "DELETE" }), onSuccess: refresh });
   const done = items.filter((s) => s.done).length;
@@ -52,9 +55,13 @@ function Subtasks({ ticketId, items, canEdit, refresh, assignees, userId, onRepl
           const owners = assignees.filter((a) => s.assigneeIds.includes(a.id));
           return (
           <li key={s.id} className="group flex items-center gap-2.5 rounded-xl px-2 py-1.5 hover:bg-slate-50">
-            <button type="button" disabled={!mine} title={mine ? undefined : owners.length ? `Only ${owners.map((o) => o.name).join(", ")} can check this` : undefined} aria-label={s.done ? "Mark as not done" : "Mark as done"} onClick={() => toggle.mutate({ id: s.id, done: !s.done })}
+            <button type="button" disabled={!mine} title={mine ? undefined : owners.length ? `Only ${owners.map((o) => o.name).join(", ")} can check this` : undefined} aria-label={s.done ? "Mark as not done" : "Mark as done"} onClick={() => toggle.mutate({ id: s.id, status: s.done ? "TODO" : "DONE" })}
               className={clsx("flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md border-2 transition", s.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 hover:border-indigo-400", !mine && "cursor-not-allowed opacity-50")}>{s.done && <Check className="h-3 w-3" strokeWidth={3} />}</button>
             <span className={clsx("min-w-0 flex-1 break-words text-sm", s.done && "text-slate-400 line-through")}>{s.title}</span>
+            <select disabled={!mine} value={s.status} onChange={(e) => toggle.mutate({ id: s.id, status: e.target.value as SubtaskRow["status"] })} aria-label="Subtask status" title={mine ? undefined : "Only the assignees can change the status"}
+              className={clsx("rounded-full px-2 py-0.5 text-[11px] font-medium outline-none disabled:opacity-60", SUB_TONE[s.status])}>
+              {(Object.keys(SUB_LABEL) as SubtaskRow["status"][]).map((k) => <option key={k} value={k}>{SUB_LABEL[k]}</option>)}
+            </select>
             {canEdit ? <PeoplePicker people={assignees} value={s.assigneeIds} onChange={(ids) => assign.mutate({ id: s.id, assigneeIds: ids })} />
               : owners.length > 0 && <span className="max-w-[9rem] truncate rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{owners.map((o) => o.name).join(", ")}</span>}
             {canEdit && !s.done && s.assigneeIds.length > 0 && (

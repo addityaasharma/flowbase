@@ -122,6 +122,8 @@ describe("who can change a ticket", () => {
     expect(st.assigneeIds).toEqual([bob.id]);
     expect((await api().patch(`/api/subtasks/${st.id}`).set(auth(alice.token)).send({ done: true })).status).toBe(403);
     expect((await api().patch(`/api/subtasks/${st.id}`).set(auth(bob.token)).send({ done: true })).status).toBe(200);
+    expect((await api().patch(`/api/subtasks/${st.id}`).set(auth(bob.token)).send({ status: "REVIEW" })).body).toMatchObject({ status: "REVIEW", done: false });
+    expect((await api().patch(`/api/subtasks/${st.id}`).set(auth(alice.token)).send({ status: "DONE" })).status).toBe(403);
     const open = (await mk({ title: "open", assigneeIds: [bob.id] })).body;
     expect((await api().post(`/api/subtasks/${open.id}/remind`).set(auth(alice.token))).status).toBe(200);
     expect((await api().post(`/api/subtasks/${open.id}/remind`).set(auth(alice.token))).status).toBe(409);

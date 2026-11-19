@@ -573,12 +573,13 @@ router.post("/tickets/:id/subtasks", wrap(async (req, res) => {
 router.patch("/subtasks/:id", wrap(async (req, res) => {
   const cur = await prisma.subtask.findUnique({ where: { id: req.params.id } }); if (!cur) return res.status(404).json({ error: "Not found" });
   const t = await subtaskTicket(req, res, cur.ticketId); if (!t) return;
-  const d = z.object({ title: subtaskTitle.optional(), done: z.boolean().optional(), assigneeIds: z.array(z.string()).max(20).optional() }).parse(req.body);
+  const d = z.object({ title: subtaskTitle.optional(), done: z.boolean().optional(), status: z.enum(["TODO", "IN_PROGRESS", "REVIEW", "DONE"]).optional(), assigneeIds: z.array(z.string()).max(20).optional() }).parse(req.body);
   if (d.assigneeIds && !subtaskPeopleOk(t, d.assigneeIds)) return res.status(400).json({ error: SUBTASK_PEOPLE });
   if (d.assigneeIds) d.assigneeIds = [...new Set(d.assigneeIds)];
-  if (d.done !== undefined && cur.assigneeIds.length && !cur.assigneeIds.includes(req.user!.id)) return res.status(403).json({ error: "Only the people this subtask is assigned to can check or uncheck it." });
+  if (d.status) d.done = d.status === "DONE"; else if (d.done !== undefined) (d as any).status = d.done ? "DONE" : "TODO"; // keep the two in step
+  if ((d.done !== undefined) && cur.assigneeIds.length && !cur.assigneeIds.includes(req.user!.id)) return res.status(403).json({ error: "Only the people this subtask is assigned to can check or uncheck it." });
   const s = await prisma.subtask.update({ where: { id: cur.id }, data: d });
-  if (d.done !== undefined && d.done !== cur.done) touched(t, req, `${d.done ? "completed" : "reopened"} subtask “${s.title}”`);
+  if (s.status !== cur.status) touched(t, req, s.status === "DONE" ? `completed subtask “${s.title}”` : cur.status === "DONE" ? `reopened subtask “${s.title}” as ${s.status.toLowerCase().replace("_", " ")}` : `moved subtask “${s.title}” to ${s.status.toLowerCase().replace("_", " ")}`);
   res.json(s);
 }));
 // the bell: one reminder email per subtask, to its assignees

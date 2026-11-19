@@ -245,6 +245,8 @@ model Subtask {
   ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   title     String
   done      Boolean  @default(false)
+  /// TODO / IN_PROGRESS / REVIEW / DONE. `done` is kept in step (done = status DONE).
+  status    SubtaskStatus @default(TODO)
   /// Only these people may tick/untick it (each must be an assignee of the ticket). Empty = anyone who can edit the ticket.
   assigneeIds String[] @default([])
   /// Set when the bell was pressed: the reminder email goes out once per subtask.
@@ -267,4 +269,11 @@ model TicketRepo {
   createdAt DateTime @default(now())
 
   @@unique([ticketId, url])
+}
+
+enum SubtaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
 }
