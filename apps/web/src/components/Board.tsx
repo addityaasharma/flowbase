@@ -215,6 +215,7 @@ export function Board() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [target, setTarget] = useState<{ col: Status; index: number } | null>(null);
   const [dragH, setDragH] = useState(120);
+  const [dragMini, setDragMini] = useState(false); // the card being dragged is a small dice tile
   const [landingId, setLandingId] = useState<string | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: user ? 6 : 100000 } }));
   const active = activeId ? tickets.find((t) => t.id === activeId) ?? null : null;
@@ -243,7 +244,9 @@ export function Board() {
     const t = tickets.find((x) => x.id === e.active.id);
     if (!t) return;
     setActiveId(t.id);
-    setDragH(e.active.rect.current.initial?.height ?? 120);
+    const tile = (e.active.rect.current.initial?.width ?? 999) < 100;
+    setDragMini(tile);
+    setDragH(tile ? 150 : e.active.rect.current.initial?.height ?? 120); // a tile dropped into a wide column needs a card-sized gap
     const start = { col: t.status, index: cols[t.status].findIndex((x) => x.id === t.id) };
     setTarget(start); targetRef.current = start; // gap starts exactly where the card was
     sendDrag(t.id, "start", start.col, start.index);  // let everyone else watch
@@ -347,7 +350,7 @@ export function Board() {
         })}
       </div>
       </div>
-      <DragOverlay dropAnimation={dropAnimation}>{active && <Card t={active} onOpen={() => {}} onAdvance={() => {}} overlay />}</DragOverlay>
+      <DragOverlay dropAnimation={dropAnimation}>{active && (dragMini ? <Tile t={active} onOpen={noop} /> : <Card t={active} onOpen={() => {}} onAdvance={() => {}} overlay />)}</DragOverlay>
     </DndContext>
   );
 }
