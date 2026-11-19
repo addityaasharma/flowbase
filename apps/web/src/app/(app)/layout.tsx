@@ -33,14 +33,14 @@ function Welcome() {
   const { user, requireAuth, setSignInOpen } = useAuth();
   const w = useWorkspace();
   return (
-    <div className="anim-pop mx-auto mt-10 max-w-xl rounded-[32px] bg-white p-10 text-center shadow-card">
+    <div className="anim-pop mx-auto mt-6 max-w-xl rounded-[32px] bg-white p-6 text-center sm:mt-10 sm:p-10 shadow-card">
       <span className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-[18px] bg-slate-100 text-slate-800 shadow-card"><FlowbaseMark className="h-7 w-auto" /></span>
-      <h2 className="text-3xl font-semibold tracking-tight">{user ? "Create your first project" : "Plan and track your team’s work"}</h2>
+      <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">{user ? "Create your first project" : "Plan and track your team’s work"}</h2>
       <p className="mx-auto mt-3 max-w-md text-slate-500">
         {user ? "A project is a workspace for your team’s tickets. You’ll be its admin and can invite teammates by email."
           : "Create a free workspace, invite your team by email and move work across the board. Everything stays private to the people you invite."}
       </p>
-      <div className="mt-7 flex justify-center gap-3">
+      <div className="mt-7 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center [&>button]:whitespace-nowrap">
         {user
           ? <button className={btnPrimary} onClick={() => w.setNewProject(true)}><FolderPlus className="h-4 w-4" />Create project</button>
           : <><button className={btnPrimary} onClick={() => requireAuth(() => w.setNewProject(true))}><FolderPlus className="h-4 w-4" />Create a project</button>
