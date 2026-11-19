@@ -16,6 +16,7 @@ const created = { users: [] as string[], projects: [] as string[] };
 const api = () => request(app);
 const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
 
+const created_users_cleanup = (id: string) => { created.users.push(id); };
 async function signUp(name: string, verified = true) {
   const email = `${name.toLowerCase()}.${tag}@test.invalid`;
   const r = await api().post("/api/auth/register").send({ name, email, password: "password123" });
@@ -176,6 +177,29 @@ describe("who can change a ticket", () => {
       await api().post("/api/push/unsubscribe").set(auth(cara.token)).send({ endpoint: ep2 });
       expect(await prisma.pushSubscription.count({ where: { endpoint: ep2 } })).toBe(0);
     } finally { setPushSender(null); }
+  });
+  it("project invitations: no password when already signed in as the invited account, otherwise the password is required", async () => {
+    const ivy = await signUp("Ivy"), jon = await signUp("Jon"), kim = await signUp("Kim");
+    const invite = async (to: { email: string }) => (await api().post("/api/invitations").set(auth(alice.token)).send({ email: to.email, projectId })).body.link.split("/").pop() as string;
+    // signed in as the invited person: the page is told so, and joining needs no password
+    const t1 = await invite(ivy);
+    expect((await api().get(`/api/invitations/token/${t1}`).set(auth(ivy.token))).body.signedIn).toEqual({ email: ivy.email, matches: true });
+    const ok = await api().post("/api/invitations/accept").set(auth(ivy.token)).send({ token: t1 });
+    expect(ok.status).toBe(201); expect(ok.body.user.id).toBe(ivy.id);
+    // signed in as somebody else: their session does not count; the invited account's password is needed, and then that account is the one signed in
+    const t2 = await invite(jon);
+    expect((await api().get(`/api/invitations/token/${t2}`).set(auth(kim.token))).body.signedIn).toEqual({ email: kim.email, matches: false });
+    expect((await api().post("/api/invitations/accept").set(auth(kim.token)).send({ token: t2 })).status).toBe(401);
+    expect((await api().post("/api/invitations/accept").set(auth(kim.token)).send({ token: t2, password: "wrong-password" })).status).toBe(401);
+    const sw = await api().post("/api/invitations/accept").set(auth(kim.token)).send({ token: t2, password: "password123" });
+    expect(sw.status).toBe(201); expect(sw.body.user.id).toBe(jon.id);
+    // nobody signed in: password needed too
+    const t3 = await invite({ email: `nobody.${tag}@test.invalid` });
+    const info = (await api().get(`/api/invitations/token/${t3}`)).body;
+    expect(info.existingUser).toBe(false); expect(info.signedIn).toBeNull();
+    expect((await api().post("/api/invitations/accept").send({ token: t3, name: "New Person" })).status).toBe(400); // a new account needs a password
+    const created = await api().post("/api/invitations/accept").send({ token: t3, name: "New Person", password: "password123" });
+    expect(created.status).toBe(201); created_users_cleanup(created.body.user.id);
   });
   it("the welcome tour is offered to new sign-ups once", async () => {
     const eve = await signUp("Eve");

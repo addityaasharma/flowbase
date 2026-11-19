@@ -12,6 +12,17 @@ declare global { namespace Express { interface Request { user?: AuthUser } } }
 
 export const signToken = (id: string, version = 0) => jwt.sign({ sub: id, v: version }, SECRET, { expiresIn: "30d" });
 
+/** Who is signed in on a PUBLIC route (a person's own session only, never a personal access token). Null if nobody, or the session is stale. */
+export async function sessionUser(req: Request) {
+  try {
+    const h = req.headers.authorization;
+    if (!h?.startsWith("Bearer ") || h.startsWith("Bearer fb_")) return null;
+    const { sub, v } = jwt.verify(h.slice(7), SECRET) as { sub: string; v?: number };
+    const u = await prisma.user.findUnique({ where: { id: sub } });
+    return u && u.active && (v ?? 0) === u.tokenVersion ? u : null;
+  } catch { return null; }
+}
+
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
     if (req.headers.authorization?.startsWith("Bearer fb_")) { // a personal access token (Claude / agents)

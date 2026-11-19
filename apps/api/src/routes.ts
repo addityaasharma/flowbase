@@ -8,7 +8,7 @@ import {
 } from "@bitcode/shared";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
-import { requireAuth, signToken } from "./auth";
+import { requireAuth, sessionUser, signToken } from "./auth";
 import { rateLimit } from "./rateLimit";
 import { BLOCKED_MSG, OVERDUE_LOCK_MSG, overdueBlocked } from "./lock";
 import { sendAssignmentEmail, sendInviteEmail, sendMentionEmail, sendPasswordResetEmail, sendSubtaskReminderEmail, sendVerifyEmail } from "./mail";
@@ -181,7 +181,8 @@ router.get("/invitations/token/:token", wrap(async (req, res) => {
   const inv = await findPending(req.params.token);
   if (!inv) return res.status(404).json({ error: "This invitation is invalid or has expired" });
   const existing = await prisma.user.findUnique({ where: { email: inv.email }, select: { id: true } });
-  res.json({ email: inv.email, project: inv.project?.name ?? null, invitedBy: inv.invitedBy.name, existingUser: !!existing });
+  const me = await sessionUser(req); // the browser's own session, if any (tells the page whether a password is needed)
+  res.json({ email: inv.email, project: inv.project?.name ?? null, invitedBy: inv.invitedBy.name, existingUser: !!existing, signedIn: me ? { email: me.email, matches: me.id === existing?.id } : null });
 }));
 
 router.post("/invitations/accept", rateLimit("accept", 20, 15 * 60_000), wrap(async (req, res) => {
@@ -190,11 +191,13 @@ router.post("/invitations/accept", rateLimit("accept", 20, 15 * 60_000), wrap(as
   if (!inv) return res.status(404).json({ error: "This invitation is invalid or has expired" });
   let user = await prisma.user.findUnique({ where: { email: inv.email } });
   if (user) {
-    // existing account: prove it's them before joining the workspace
-    if (!user.active || !(await bcrypt.compare(password, user.passwordHash))) return res.status(401).json({ error: "Wrong password for this account" });
+    // existing account: either this browser is already signed in as that very account (no password needed), or they prove it's them
+    const me = await sessionUser(req);
+    const alreadyThem = !!me && me.id === user.id;
+    if (!user.active || (!alreadyThem && !(password && (await bcrypt.compare(password, user.passwordHash))))) return res.status(401).json({ error: "Wrong password for this account" });
   } else {
     if (!name) return res.status(400).json({ error: "Please enter your name" });
-    if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters" });
+    if (!password || password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters" });
     user = await prisma.user.create({ data: { name, email: inv.email, passwordHash: await bcrypt.hash(password, 10), emailVerifiedAt: new Date() } });
   }
   if (inv.projectId) {

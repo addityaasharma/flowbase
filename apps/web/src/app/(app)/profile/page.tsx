@@ -2,7 +2,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Bot, Check, FolderPlus, LogOut, Trash2 } from "lucide-react";
+import { ArrowRight, Bot, Check, ChevronDown, FolderPlus, LogOut, Trash2 } from "lucide-react";
+import clsx from "clsx";
 import { DeleteProjectModal } from "@/components/DeleteProjectModal";
 import { DeveloperAccess } from "@/components/DeveloperAccess";
 import { AppSettings } from "@/components/AppSettings";
@@ -19,17 +20,21 @@ function ChangePassword() {
   const [again, setAgain] = useState("");
   const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
   const [error, setError] = useState("");
+  const [open, setOpen] = useState(false); // closed until someone wants to change it
   const mismatch = again.length > 0 && next !== again;
   return (
-    <section className="rounded-[28px] bg-white p-5 shadow-card">
-      <h3 className="text-lg font-semibold tracking-tight">Change password</h3>
-      <form className="mt-3 grid gap-2.5" onSubmit={async (e) => {
+    <section className="min-w-0 rounded-[28px] bg-white p-4 shadow-card sm:p-5">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-center justify-between gap-3 text-left">
+        <h3 className="text-lg font-semibold tracking-tight">Change password</h3>
+        <ChevronDown className={clsx("h-5 w-5 shrink-0 text-slate-400 transition-transform duration-200", open && "rotate-180")} />
+      </button>
+      {open && <form className="anim-fade mt-3 grid gap-2.5" onSubmit={async (e) => {
         e.preventDefault(); if (mismatch) return;
         setState("saving"); setError("");
         try {
           const r = await api<{ token: string }>("/auth/password", { method: "POST", json: { currentPassword: cur, newPassword: next } });
           tokenStore.set(r.token); // this device stays signed in; other devices are signed out
-          setCur(""); setNext(""); setAgain(""); setState("saved"); setTimeout(() => setState("idle"), 2500);
+          setCur(""); setNext(""); setAgain(""); setState("saved"); setTimeout(() => { setState("idle"); setOpen(false); }, 2500);
         } catch (err) { setError((err as Error).message); setState("idle"); }
       }}>
         <input className={inputCls} type="password" placeholder="Current password" autoComplete="current-password" value={cur} onChange={(e) => setCur(e.target.value)} required />
@@ -41,7 +46,7 @@ function ChangePassword() {
           {mismatch && <span className="text-sm text-rose-600">Passwords don’t match</span>}
           {error && <span className="text-sm text-rose-600">{error}</span>}
         </div>
-      </form>
+      </form>}
     </section>
   );
 }

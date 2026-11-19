@@ -41,7 +41,7 @@ export const registerSchema = z.object({
 export const inviteSchema = z.object({
   email: z.string().email().max(200), projectId: z.string(), role: z.enum(ROLES).default("MEMBER"),
 });
-export const acceptInviteSchema = z.object({ token: z.string().min(10), name: z.string().trim().min(1).max(80).optional(), password: z.string().min(6).max(200) });
+export const acceptInviteSchema = z.object({ token: z.string().min(10), name: z.string().trim().min(1).max(80).optional(), password: z.string().min(6).max(200).optional() }); // no password needed when the invited account is already signed in
 export const memberRoleSchema = z.object({ role: z.enum(ROLES) });
 export const createProjectSchema = z.object({
   name: z.string().min(1), key: z.string().regex(/^[A-Z]{2,6}$/, "2-6 uppercase letters"),
