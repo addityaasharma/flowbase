@@ -88,10 +88,11 @@ async function projectAccess(req: Request, res: Response, projectId: string, all
 type UserRow = { id: string; name: string; email: string; title: string | null; active: boolean; emailVerifiedAt: Date | null; tourSeenAt?: Date | null };
 const publicUser = (u: UserRow) => ({ id: u.id, name: u.name, email: u.email, title: u.title, active: u.active, emailVerified: !!u.emailVerifiedAt, tourSeen: u.tourSeenAt === undefined ? true : !!u.tourSeenAt });
 
-/** Creates a one-time emailed link (only its hash is stored) and invalidates earlier unused ones of the same kind. */
+/** Creates a one-time emailed link (only its hash is stored). A new password-reset link replaces earlier ones; confirmation links
+ *  do not: if two confirmation emails go out (e.g. "Resend"), whichever one is opened first must still work. */
 async function issueAuthToken(userId: string, kind: "reset" | "verify", ttlMs: number) {
   const token = crypto.randomBytes(32).toString("hex");
-  await prisma.authToken.updateMany({ where: { userId, kind, usedAt: null }, data: { usedAt: new Date() } });
+  if (kind === "reset") await prisma.authToken.updateMany({ where: { userId, kind, usedAt: null }, data: { usedAt: new Date() } });
   await prisma.authToken.create({ data: { userId, kind, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + ttlMs) } });
   return token;
 }
@@ -153,13 +154,20 @@ router.post("/auth/reset", rateLimit("reset", 10, 15 * 60_000), wrap(async (req,
 
 router.post("/auth/verify", rateLimit("verify", 20, 15 * 60_000), wrap(async (req, res) => {
   const { token } = verifySchema.parse(req.body);
-  const t = await findAuthToken(token, "verify");
-  if (!t) return res.status(400).json({ error: "This confirmation link is invalid or has expired" });
-  await prisma.$transaction([
-    prisma.authToken.update({ where: { id: t.id }, data: { usedAt: new Date() } }),
-    prisma.user.update({ where: { id: t.userId }, data: { emailVerifiedAt: t.user.emailVerifiedAt ?? new Date() } }),
+  const t = await prisma.authToken.findFirst({ where: { tokenHash: hashToken(token), kind: "verify", expiresAt: { gt: new Date() } }, include: { user: true } });
+  if (!t || !t.user.active) return res.status(400).json({ error: "This confirmation link is invalid or has expired" });
+  // opened again (a second tab, a mail scanner, a double request): the address is already confirmed, which is not an error. No session is handed out twice.
+  if (t.usedAt) return t.user.emailVerifiedAt ? res.json({ ok: true, alreadyVerified: true }) : res.status(400).json({ error: "This confirmation link is invalid or has expired" });
+  const claimed = await prisma.authToken.updateMany({ where: { id: t.id, usedAt: null }, data: { usedAt: new Date() } }); // atomic: only one request wins
+  if (!claimed.count) return res.json({ ok: true, alreadyVerified: true });
+  const now = new Date();
+  const [u] = await prisma.$transaction([
+    prisma.user.update({ where: { id: t.userId }, data: { emailVerifiedAt: t.user.emailVerifiedAt ?? now } }),
+    prisma.authToken.updateMany({ where: { userId: t.userId, kind: "verify", usedAt: null }, data: { usedAt: now } }), // the other emailed links are spent too
   ]);
-  res.json({ ok: true });
+  // Opening the emailed link proves the mailbox is theirs (same trust as a password-reset link), so it also signs that account in,
+  // replacing whoever else was signed in on this browser.
+  res.json({ ok: true, token: signToken(u.id, u.tokenVersion), user: publicUser(u) });
 }));
 
 const findPending = (token: string) =>
@@ -225,6 +233,8 @@ router.post("/auth/tour-seen", wrap(async (req, res) => {
 router.post("/auth/resend-verification", rateLimit("resendverify", 3, 60 * 60_000), wrap(async (req, res) => {
   const u = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id } });
   if (u.emailVerifiedAt) return res.json({ ok: true, alreadyVerified: true });
+  // one was sent a moment ago (sign-up, or a double click): don't send a second one on top of it
+  if (await prisma.authToken.findFirst({ where: { userId: u.id, kind: "verify", createdAt: { gt: new Date(Date.now() - 60_000) } }, select: { id: true } })) return res.json({ ok: true, throttled: true });
   await sendVerification(u);
   res.json({ ok: true });
 }));

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { app } from "./app";
 import { prisma } from "./db";
+import { hashToken } from "./tokens";
 
 /**
  * Integration tests against a real database. They create their own users/projects (unique per run) and delete them afterwards.
@@ -114,6 +115,30 @@ describe("who can change a ticket", () => {
     const r2 = (await api().post(`/api/tickets/${mine.id}/comments`).set(auth(bob.token)).send({ body: "reply to reply", parentId: r1.id })).body;
     expect(r2.parentId).toBe(c1.id);
     expect((await api().post(`/api/tickets/${bobs.id}/comments`).set(auth(alice.token)).send({ body: "x", parentId: c1.id })).status).toBe(400);
+  });
+  it("email confirmation links: both emails work, opening one signs that account in, reopening is harmless", async () => {
+    const fay = await signUp("Fay", false);
+    const other = await signUp("Gus"); // someone else, already signed in on the same browser
+    const mk = async (raw: string) => prisma.authToken.create({ data: { userId: fay.id, kind: "verify", tokenHash: hashToken(raw), expiresAt: new Date(Date.now() + 864e5) } });
+    await prisma.authToken.deleteMany({ where: { userId: fay.id } }); // drop the one sign-up emailed
+    await mk(`first-${tag}-aaaaaaaaaaaa`); await mk(`second-${tag}-bbbbbbbbbbbb`); // two emails went out; the later one must not kill the earlier
+    const r1 = await api().post("/api/auth/verify").set(auth(other.token)).send({ token: `first-${tag}-aaaaaaaaaaaa` });
+    expect(r1.status).toBe(200);
+    expect(r1.body.user.id).toBe(fay.id);          // the link's account, not the one that happened to be signed in
+    expect(r1.body.user.emailVerified).toBe(true);
+    expect((await api().get("/api/auth/me").set(auth(r1.body.token))).body.id).toBe(fay.id);
+    const r2 = await api().post("/api/auth/verify").send({ token: `second-${tag}-bbbbbbbbbbbb` }); // the other email, opened afterwards
+    expect(r2.status).toBe(200); expect(r2.body.alreadyVerified).toBe(true); expect(r2.body.token).toBeUndefined(); // fine, but no second session
+    const r3 = await api().post("/api/auth/verify").send({ token: `first-${tag}-aaaaaaaaaaaa` }); // same link again
+    expect(r3.status).toBe(200); expect(r3.body.token).toBeUndefined();
+    expect((await api().post("/api/auth/verify").send({ token: `nonsense-${tag}-cccccccccc` })).status).toBe(400);
+  });
+  it("resend confirmation is not sent twice in a row", async () => {
+    const hal = await signUp("Hal", false);
+    const before = await prisma.authToken.count({ where: { userId: hal.id, kind: "verify" } });
+    const r = await api().post("/api/auth/resend-verification").set(auth(hal.token));
+    expect(r.status).toBe(200); expect(r.body.throttled).toBe(true); // sign-up just sent one
+    expect(await prisma.authToken.count({ where: { userId: hal.id, kind: "verify" } })).toBe(before);
   });
   it("the welcome tour is offered to new sign-ups once", async () => {
     const eve = await signUp("Eve");
