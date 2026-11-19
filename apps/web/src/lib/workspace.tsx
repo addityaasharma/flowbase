@@ -18,6 +18,7 @@ type Ctx = {
   toneOf: (userId: string) => Tone; // colour of a person, unique within the open project
   members: User[]; myRole: Role | null; canManage: boolean; // canManage = admin or manager of the current project
   assignee: string; setAssignee: (id: string) => void;
+  listStatus: string; setListStatus: (s: string) => void; // the All tickets list only: show just one status
   tickets: Ticket[]; refetchTickets: () => void; openTicket: (id: string | null) => void; openId: string | null;
   /** Open any ticket you can access (switching project if needed). Resolves false if it no longer exists. */
   goToTicket: (id: string) => Promise<boolean>;
@@ -36,6 +37,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [projectId, setProjectId] = useState(readSavedProject);
   const [assignee, setAssignee] = useState("all");
+  const [listStatus, setListStatus] = useState("");
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [openId, openTicket] = useState<string | null>(null);
   const [raise, setRaise] = useState(false);
@@ -95,7 +97,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     <C.Provider value={{
       projects: projects.data ?? [], projectsLoaded: projects.isSuccess, project, setProjectId: (id) => { setProjectId(id); setAssignee("all"); setFilters(NO_FILTERS); },
       toneOf, members: project?.members ?? [], myRole, canManage: myRole === "ADMIN" || myRole === "MANAGER",
-      assignee, setAssignee, tickets: filtered, refetchTickets: () => tickets.refetch(), openTicket, openId,
+      assignee, setAssignee, listStatus, setListStatus, tickets: filtered, refetchTickets: () => tickets.refetch(), openTicket, openId,
       filters, setFilters, allLabels, totalCount: list.length,
       goToTicket, raise, setRaise, newProject, setNewProject,
     }}>{children}</C.Provider>

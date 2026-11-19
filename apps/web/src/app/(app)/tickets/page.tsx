@@ -1,25 +1,20 @@
 "use client";
-import { useState } from "react";
-import { STATUSES, STATUS_LABEL } from "@bitcode/shared";
 import { useWorkspace } from "@/lib/workspace";
 import { useAuth } from "@/lib/auth";
-import { AssigneeStack, assigneeLabel, PriorityPill, StatusPill, TypeIcon, inputCls } from "@/components/Bits";
+import { AssigneeStack, assigneeLabel, PriorityPill, StatusPill, TypeIcon } from "@/components/Bits";
 
 export default function AllTickets() {
-  const { tickets, openTicket } = useWorkspace();
+  const { tickets, openTicket, listStatus: status } = useWorkspace();
   const { user } = useAuth();
-  const [status, setStatus] = useState("");
   const rows = tickets.filter((t) => !status || t.status === status);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-3">
-        <select className={inputCls + " !w-44"} value={status} onChange={(e) => setStatus(e.target.value)}><option value="">All statuses</option>{STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}</select>
-      </div>
-      <div className="overflow-x-auto rounded-[24px] bg-white shadow-card">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-slate-100 text-[11px] uppercase tracking-wider text-slate-500">
-            <tr>{["Key", "Title", "Status", "Priority", "Assignees", "Due", "Updated"].map((h) => <th key={h} className="px-4 py-3 font-semibold">{h}</th>)}</tr>
+    <div className="flex h-full min-h-0 flex-col">
+      {/* only this card scrolls (both ways); the header row stays put */}
+      <div className="min-h-0 overflow-auto overscroll-contain rounded-[24px] bg-white shadow-card">
+        <table className="w-full min-w-[760px] text-left text-sm">
+          <thead className="sticky top-0 z-10 bg-white text-[11px] uppercase tracking-wider text-slate-500 shadow-[0_1px_0_#f1f5f9]">
+            <tr>{["Key", "Title", "Status", "Priority", "Assignees", "Due", "Updated"].map((h) => <th key={h} className="whitespace-nowrap px-4 py-3 font-semibold">{h}</th>)}</tr>
           </thead>
           <tbody>
             {rows.map((t) => (
