@@ -115,6 +115,19 @@ describe("who can change a ticket", () => {
     expect(r2.parentId).toBe(c1.id);
     expect((await api().post(`/api/tickets/${bobs.id}/comments`).set(auth(alice.token)).send({ body: "x", parentId: c1.id })).status).toBe(400);
   });
+  it("subtask assignees: only they can tick it, the bell works once", async () => {
+    const mk = (b: object) => api().post(`/api/tickets/${bobs.id}/subtasks`).set(auth(alice.token)).send(b);
+    expect((await mk({ title: "outsider", assigneeIds: [cara.id] })).status).toBe(400); // not on the ticket
+    const st = (await mk({ title: "for bob", assigneeIds: [bob.id] })).body;
+    expect(st.assigneeIds).toEqual([bob.id]);
+    expect((await api().patch(`/api/subtasks/${st.id}`).set(auth(alice.token)).send({ done: true })).status).toBe(403);
+    expect((await api().patch(`/api/subtasks/${st.id}`).set(auth(bob.token)).send({ done: true })).status).toBe(200);
+    const open = (await mk({ title: "open", assigneeIds: [bob.id] })).body;
+    expect((await api().post(`/api/subtasks/${open.id}/remind`).set(auth(alice.token))).status).toBe(200);
+    expect((await api().post(`/api/subtasks/${open.id}/remind`).set(auth(alice.token))).status).toBe(409);
+    const nobody = (await mk({ title: "nobody" })).body;
+    expect((await api().post(`/api/subtasks/${nobody.id}/remind`).set(auth(alice.token))).status).toBe(400);
+  });
   it("subtasks and attached repos follow the same edit rule", async () => {
     expect((await api().post(`/api/tickets/${bobs.id}/subtasks`).set(auth(cara.token)).send({ title: "x" })).status).toBe(403);
     expect((await api().post(`/api/tickets/${bobs.id}/subtasks`).set(auth(bob.token)).send({ title: "do it" })).status).toBe(201);

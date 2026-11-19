@@ -245,8 +245,10 @@ model Subtask {
   ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   title     String
   done      Boolean  @default(false)
-  /// Only this person may tick/untick it (must be an assignee of the ticket). Null = anyone who can edit the ticket.
-  assigneeId String?
+  /// Only these people may tick/untick it (each must be an assignee of the ticket). Empty = anyone who can edit the ticket.
+  assigneeIds String[] @default([])
+  /// Set when the bell was pressed: the reminder email goes out once per subtask.
+  remindedAt DateTime?
   position  Float    @default(0)
   createdAt DateTime @default(now())
 

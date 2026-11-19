@@ -10,7 +10,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { requireAuth, signToken } from "./auth";
 import { rateLimit } from "./rateLimit";
-import { sendAssignmentEmail, sendInviteEmail, sendMentionEmail, sendPasswordResetEmail, sendVerifyEmail } from "./mail";
+import { sendAssignmentEmail, sendInviteEmail, sendMentionEmail, sendPasswordResetEmail, sendSubtaskReminderEmail, sendVerifyEmail } from "./mail";
 import { grant, openStream, publish, revoke } from "./events";
 import { notify, ticketAudience } from "./notifications";
 import { currentVia, newToken } from "./tokens"; // (routes.ts already has the same sha256 hashToken helper)
@@ -552,6 +552,8 @@ async function subtaskTicket(req: Request, res: Response, ticketId: string) {
   if (!canEditTicket(t, req.user!.id)) { res.status(403).json(NOT_ALLOWED); return null; }
   return t;
 }
+const SUBTASK_PEOPLE = "A subtask can only be assigned to people assigned to this ticket";
+const subtaskPeopleOk = (t: { assignees: { userId: string }[] }, ids: string[]) => ids.every((id) => t.assignees.some((a) => a.userId === id));
 const touched = (t: { id: string; projectId: string; title: string; number: number; project: { key: string } }, req: Request, what: string) => {
   const key = `${t.project.key}-${t.number}`;
   log(t.id, req.user!.id, what).catch(console.error); // (a Prisma query only runs once something awaits it)
@@ -560,23 +562,41 @@ const touched = (t: { id: string; projectId: string; title: string; number: numb
 router.post("/tickets/:id/subtasks", wrap(async (req, res) => {
   const t = await subtaskTicket(req, res, req.params.id); if (!t) return;
   const title = subtaskTitle.parse(req.body?.title);
-  const assigneeId = z.string().nullish().parse(req.body?.assigneeId) ?? null;
-  if (assigneeId && !t.assignees.some((a) => a.userId === assigneeId)) return res.status(400).json({ error: "A subtask can only be assigned to someone assigned to this ticket" });
+  const assigneeIds = [...new Set(z.array(z.string()).max(20).optional().parse(req.body?.assigneeIds) ?? [])];
+  if (!subtaskPeopleOk(t, assigneeIds)) return res.status(400).json({ error: SUBTASK_PEOPLE });
   if ((await prisma.subtask.count({ where: { ticketId: t.id } })) >= 50) return res.status(400).json({ error: "A ticket can have up to 50 subtasks" });
   const last = await prisma.subtask.findFirst({ where: { ticketId: t.id }, orderBy: { position: "desc" }, select: { position: true } });
-  const s = await prisma.subtask.create({ data: { ticketId: t.id, title, assigneeId, position: (last?.position ?? 0) + 1000 } });
+  const s = await prisma.subtask.create({ data: { ticketId: t.id, title, assigneeIds, position: (last?.position ?? 0) + 1000 } });
   touched(t, req, `added subtask “${title}”`);
   res.status(201).json(s);
 }));
 router.patch("/subtasks/:id", wrap(async (req, res) => {
   const cur = await prisma.subtask.findUnique({ where: { id: req.params.id } }); if (!cur) return res.status(404).json({ error: "Not found" });
   const t = await subtaskTicket(req, res, cur.ticketId); if (!t) return;
-  const d = z.object({ title: subtaskTitle.optional(), done: z.boolean().optional(), assigneeId: z.string().nullable().optional() }).parse(req.body);
-  if (d.assigneeId && !t.assignees.some((a) => a.userId === d.assigneeId)) return res.status(400).json({ error: "A subtask can only be assigned to someone assigned to this ticket" });
-  if (d.done !== undefined && cur.assigneeId && cur.assigneeId !== req.user!.id) return res.status(403).json({ error: "Only the person this subtask is assigned to can check or uncheck it." });
+  const d = z.object({ title: subtaskTitle.optional(), done: z.boolean().optional(), assigneeIds: z.array(z.string()).max(20).optional() }).parse(req.body);
+  if (d.assigneeIds && !subtaskPeopleOk(t, d.assigneeIds)) return res.status(400).json({ error: SUBTASK_PEOPLE });
+  if (d.assigneeIds) d.assigneeIds = [...new Set(d.assigneeIds)];
+  if (d.done !== undefined && cur.assigneeIds.length && !cur.assigneeIds.includes(req.user!.id)) return res.status(403).json({ error: "Only the people this subtask is assigned to can check or uncheck it." });
   const s = await prisma.subtask.update({ where: { id: cur.id }, data: d });
   if (d.done !== undefined && d.done !== cur.done) touched(t, req, `${d.done ? "completed" : "reopened"} subtask “${s.title}”`);
   res.json(s);
+}));
+// the bell: one reminder email per subtask, to its assignees
+router.post("/subtasks/:id/remind", wrap(async (req, res) => {
+  const cur = await prisma.subtask.findUnique({ where: { id: req.params.id } }); if (!cur) return res.status(404).json({ error: "Not found" });
+  const t = await subtaskTicket(req, res, cur.ticketId); if (!t) return;
+  if (!cur.assigneeIds.length) return res.status(400).json({ error: "Assign this subtask to someone first" });
+  if (cur.done) return res.status(400).json({ error: "This subtask is already done" });
+  const claimed = await prisma.subtask.updateMany({ where: { id: cur.id, remindedAt: null }, data: { remindedAt: new Date() } }); // atomic: only one press wins
+  if (!claimed.count) return res.status(409).json({ error: "A reminder was already sent for this subtask" });
+  const users = await prisma.user.findMany({ where: { id: { in: cur.assigneeIds }, active: true }, select: { email: true, name: true } });
+  const actor = actorOf(req); const key = `${t.project.key}-${t.number}`;
+  for (const u of users) {
+    sendSubtaskReminderEmail({ to: u.email, name: u.name, actor: actor.name, project: t.project.name, ticket: { key, title: t.title }, subtask: cur.title, link: `${WEB_URL()}/?ticket=${t.id}` })
+      .then((r) => { if (!r.sent) console.warn(`[mail] subtask reminder to ${u.email} not sent: ${r.error}`); }).catch(console.error);
+  }
+  touched(t, req, `sent a reminder for subtask “${cur.title}”`);
+  res.json({ ok: true, remindedAt: new Date().toISOString() });
 }));
 router.delete("/subtasks/:id", wrap(async (req, res) => {
   const cur = await prisma.subtask.findUnique({ where: { id: req.params.id } }); if (!cur) return res.status(404).json({ error: "Not found" });

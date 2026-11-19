@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { PRIORITIES, PRIORITY_LABEL, STATUSES, STATUS_LABEL } from "@bitcode/shared";
-import { Bot, Check, ChevronDown, Copy, CornerDownRight, GitBranch, Github, Lock, Pencil, Trash2, X } from "lucide-react";
+import { Bell, Bot, Check, ChevronDown, Copy, CornerDownRight, GitBranch, Github, Lock, Pencil, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useWorkspace } from "@/lib/workspace";
@@ -13,13 +13,32 @@ import { AssigneePicker, Avatar, PriorityPill, StatusPill, TypeIcon, btnGhost, b
 import { Markdown } from "./Markdown";
 import { RichEditor } from "./RichEditor";
 
+/** Multi-select of people (a compact dropdown with checkboxes). */
+function PeoplePicker({ people, value, onChange }: { people: { id: string; name: string }[]; value: string[]; onChange: (ids: string[]) => void }) {
+  const names = people.filter((p) => value.includes(p.id)).map((p) => p.name.split(" ")[0]);
+  return (
+    <details className="relative">
+      <summary className="max-w-[8rem] cursor-pointer list-none truncate rounded-full bg-slate-100 px-2.5 py-1 text-[11px] text-slate-600 hover:bg-slate-200">{names.length ? names.join(", ") : "Anyone"}</summary>
+      <div className="absolute right-0 z-20 mt-1 w-48 rounded-xl bg-white p-1.5 shadow-lift ring-1 ring-slate-200">
+        {people.length === 0 && <p className="px-2 py-1 text-xs text-slate-400">Assign people to the ticket first</p>}
+        {people.map((p) => (
+          <label key={p.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-slate-50">
+            <input type="checkbox" checked={value.includes(p.id)} onChange={(e) => onChange(e.target.checked ? [...value, p.id] : value.filter((x) => x !== p.id))} />{p.name}
+          </label>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 /** Checklist inside the ticket, with a progress bar. Only people who can edit the ticket can change it. */
 function Subtasks({ ticketId, items, canEdit, refresh, assignees, userId, onReply }: { ticketId: string; items: SubtaskRow[]; canEdit: boolean; refresh: () => void; assignees: { id: string; name: string }[]; userId?: string; onReply: (s: SubtaskRow) => void }) {
   const [text, setText] = useState("");
-  const [who, setWho] = useState("");
-  const add = useMutation({ mutationFn: (title: string) => api(`/tickets/${ticketId}/subtasks`, { method: "POST", json: { title, assigneeId: who || null } }), onSuccess: () => { setText(""); refresh(); } });
-  const assign = useMutation({ mutationFn: (v: { id: string; assigneeId: string | null }) => api(`/subtasks/${v.id}`, { method: "PATCH", json: { assigneeId: v.assigneeId } }), onSuccess: refresh });
+  const [who, setWho] = useState<string[]>([]);
+  const add = useMutation({ mutationFn: (title: string) => api(`/tickets/${ticketId}/subtasks`, { method: "POST", json: { title, assigneeIds: who } }), onSuccess: () => { setText(""); setWho([]); refresh(); } });
+  const assign = useMutation({ mutationFn: (v: { id: string; assigneeIds: string[] }) => api(`/subtasks/${v.id}`, { method: "PATCH", json: { assigneeIds: v.assigneeIds } }), onSuccess: refresh });
   const toggle = useMutation({ mutationFn: (v: { id: string; done: boolean }) => api(`/subtasks/${v.id}`, { method: "PATCH", json: { done: v.done } }), onSuccess: refresh });
+  const remind = useMutation({ mutationFn: (id: string) => api(`/subtasks/${id}/remind`, { method: "POST" }), onSuccess: refresh });
   const remove = useMutation({ mutationFn: (id: string) => api(`/subtasks/${id}`, { method: "DELETE" }), onSuccess: refresh });
   const done = items.filter((s) => s.done).length;
   if (!items.length && !canEdit) return null;
@@ -29,18 +48,19 @@ function Subtasks({ ticketId, items, canEdit, refresh, assignees, userId, onRepl
       {items.length > 0 && <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{ width: `${(done / items.length) * 100}%` }} /></div>}
       <ul className="space-y-1">
         {items.map((s) => {
-          const mine = s.assigneeId ? s.assigneeId === userId : canEdit; // only the assigned person ticks it
-          const owner = assignees.find((a) => a.id === s.assigneeId);
+          const mine = s.assigneeIds.length ? !!userId && s.assigneeIds.includes(userId) : canEdit; // only the assigned person ticks it
+          const owners = assignees.filter((a) => s.assigneeIds.includes(a.id));
           return (
           <li key={s.id} className="group flex items-center gap-2.5 rounded-xl px-2 py-1.5 hover:bg-slate-50">
-            <button type="button" disabled={!mine} title={mine ? undefined : owner ? `Only ${owner.name} can check this` : undefined} aria-label={s.done ? "Mark as not done" : "Mark as done"} onClick={() => toggle.mutate({ id: s.id, done: !s.done })}
+            <button type="button" disabled={!mine} title={mine ? undefined : owners.length ? `Only ${owners.map((o) => o.name).join(", ")} can check this` : undefined} aria-label={s.done ? "Mark as not done" : "Mark as done"} onClick={() => toggle.mutate({ id: s.id, done: !s.done })}
               className={clsx("flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md border-2 transition", s.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 hover:border-indigo-400", !mine && "cursor-not-allowed opacity-50")}>{s.done && <Check className="h-3 w-3" strokeWidth={3} />}</button>
             <span className={clsx("min-w-0 flex-1 break-words text-sm", s.done && "text-slate-400 line-through")}>{s.title}</span>
-            {canEdit ? (
-              <select value={s.assigneeId ?? ""} onChange={(e) => assign.mutate({ id: s.id, assigneeId: e.target.value || null })} className="max-w-[7rem] truncate rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 outline-none">
-                <option value="">Anyone</option>{assignees.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-            ) : owner && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{owner.name}</span>}
+            {canEdit ? <PeoplePicker people={assignees} value={s.assigneeIds} onChange={(ids) => assign.mutate({ id: s.id, assigneeIds: ids })} />
+              : owners.length > 0 && <span className="max-w-[9rem] truncate rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{owners.map((o) => o.name).join(", ")}</span>}
+            {canEdit && !s.done && s.assigneeIds.length > 0 && (
+              <button type="button" disabled={!!s.remindedAt || remind.isPending} onClick={() => remind.mutate(s.id)} aria-label="Send reminder email" title={s.remindedAt ? "Reminder already sent" : "Email the assignees a reminder (once)"}
+                className={clsx("transition", s.remindedAt ? "cursor-not-allowed text-amber-400" : "text-slate-300 hover:text-amber-500")}><Bell className="h-4 w-4" fill={s.remindedAt ? "currentColor" : "none"} /></button>
+            )}
             {userId && <button type="button" aria-label="Reply to this subtask" title="Reply in comments" onClick={() => onReply(s)} className="text-slate-300 hover:text-indigo-600"><CornerDownRight className="h-4 w-4" /></button>}
             {canEdit && <button type="button" aria-label="Remove subtask" onClick={() => remove.mutate(s.id)} className="hidden text-slate-300 hover:text-rose-600 group-hover:block"><X className="h-4 w-4" /></button>}
           </li>
@@ -49,7 +69,7 @@ function Subtasks({ ticketId, items, canEdit, refresh, assignees, userId, onRepl
       {canEdit && (
         <form className="mt-2 flex gap-1.5" onSubmit={(e) => { e.preventDefault(); if (text.trim() && !add.isPending) add.mutate(text.trim()); }}>
           <input value={text} maxLength={200} onChange={(e) => setText(e.target.value)} placeholder="Add a subtask and press Enter" className="min-w-0 flex-1 rounded-xl bg-slate-100 px-3.5 py-2 text-sm outline-none placeholder:text-slate-400 focus:bg-white focus:ring-4 focus:ring-indigo-500/15" />
-          <select value={who} onChange={(e) => setWho(e.target.value)} aria-label="Assign subtask" className="w-28 rounded-xl bg-slate-100 px-2 text-xs text-slate-600 outline-none"><option value="">Anyone</option>{assignees.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select>
+          <PeoplePicker people={assignees} value={who} onChange={setWho} />
           {add.error && <p className="mt-1 text-xs text-rose-600">{(add.error as Error).message}</p>}
         </form>
       )}

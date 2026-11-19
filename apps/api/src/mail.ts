@@ -111,3 +111,15 @@ export function sendAssignmentEmail(o: AssignmentMail) {
   const { subject, html } = renderAssignmentEmail(o);
   return deliver(o.to, subject, html, o.link);
 }
+
+export function sendSubtaskReminderEmail(o: { to: string; name: string; actor: string; project: string; ticket: { key: string; title: string }; subtask: string; link: string }) {
+  const html = shell("Reminder: a subtask is waiting on you",
+    `<p style="color:#6e6e73;line-height:1.5">Hi ${esc(o.name.split(" ")[0])}, ${esc(o.actor)} is reminding you about a subtask assigned to you.</p>
+     <div style="background:#f5f5f7;border-radius:16px;padding:16px 18px;margin:16px 0">
+       <div style="color:#86868b;font-size:12px;font-weight:600">${esc(o.ticket.key)} · ${esc(o.project)}</div>
+       <div style="font-size:14px;color:#6e6e73;margin-top:2px">${esc(o.ticket.title)}</div>
+       <div style="font-size:17px;font-weight:600;margin-top:6px">☐ ${esc(o.subtask)}</div>
+     </div>${button(o.link, "Open task")}`,
+    `You're receiving this because a subtask is assigned to you on Flowbase.`);
+  return deliver(o.to, `Reminder: ${o.subtask} (${o.ticket.key})`.slice(0, 150), html, o.link);
+}

@@ -12,6 +12,6 @@ export type Comment = { id: string; body: string; createdAt: string; author: Use
 export type AppNotification = { id: string; kind: string; text: string; actorId: string | null; actorName: string | null; projectId: string | null; ticketId: string | null; createdAt: string; readAt: string | null };
 export type Activity = { id: string; message: string; createdAt: string; actor: User; viaAgent?: string | null };
 export type ApiTokenRow = { id: string; name: string; prefix: string; canCommentOthers: boolean; level: "tasks" | "collaborator" | "full"; expiresAt: string | null; lastUsedAt: string | null; createdAt: string };
-export type SubtaskRow = { id: string; title: string; done: boolean; assigneeId: string | null; position: number };
+export type SubtaskRow = { id: string; title: string; done: boolean; assigneeIds: string[]; remindedAt: string | null; position: number };
 export type TicketRepoRow = { id: string; url: string; branch: string | null; createdAt: string; addedBy: { id: string; name: string } };
 export type TicketDetail = Omit<Ticket, "subtasks"> & { comments: Comment[]; activities: Activity[]; subtasks: SubtaskRow[]; repos: TicketRepoRow[] };

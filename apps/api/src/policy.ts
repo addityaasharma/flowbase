@@ -13,7 +13,7 @@ const re = (s: string) => new RegExp(`^${s}$`);
 const COLLAB: Array<[string, RegExp]> = [
   ["GET", re("/auth/me")], ["GET", re("/projects")], ["GET", re("/tickets")], ["GET", re(`/tickets/${ID}`)], ["GET", re("/notifications")],
   ["POST", re("/tickets")], ["PATCH", re(`/tickets/${ID}`)], ["POST", re(`/tickets/${ID}/move`)], ["POST", re(`/tickets/${ID}/comments`)],
-  ["POST", re(`/tickets/${ID}/subtasks`)], ["PATCH", re(`/subtasks/${ID}`)], ["DELETE", re(`/subtasks/${ID}`)],
+  ["POST", re(`/tickets/${ID}/subtasks`)], ["PATCH", re(`/subtasks/${ID}`)], ["POST", re(`/subtasks/${ID}/remind`)], ["DELETE", re(`/subtasks/${ID}`)],
   ["POST", re(`/tickets/${ID}/repos`)], ["DELETE", re(`/ticket-repos/${ID}`)],
   ["POST", re("/uploads")], ["POST", re("/notifications/read-all")], ["POST", re(`/notifications/${ID}/read`)],
 ];
