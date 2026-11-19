@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { Readable } from "node:stream";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -11,12 +12,13 @@ export const UPLOAD_DIR = path.resolve(process.env.UPLOAD_DIR || path.join(proce
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 /**
- * Where the image bytes live. With the R2_* settings present, new images go to a private Cloudflare R2 bucket and are streamed back through
- * the API (same URL, same security headers). Without them, everything stays on this disk (development, tests). Images that are still only
- * on disk keep being served from there, so moving to R2 never breaks an existing link.
+ * Where the image bytes live. With the R2_* settings present, new images go to a private Cloudflare R2 bucket. Viewing one costs this server
+ * almost nothing: /api/uploads/<name> answers with a redirect to a time-limited R2 link and the browser downloads it from R2 directly. Without
+ * the settings, everything stays on this disk (development, tests). Images that are still only on disk keep being served from there, so
+ * moving to R2 never breaks an existing link.
  */
 export type Stored = { stream: Readable; length?: number };
-export type Storage = { remote: boolean; put(name: string, body: Buffer, mime: string): Promise<void>; get(name: string): Promise<Stored | null>; del(name: string): Promise<void> };
+export type Storage = { remote: boolean; link?(name: string): Promise<string>; put(name: string, body: Buffer, mime: string): Promise<void>; get(name: string): Promise<Stored | null>; del(name: string): Promise<void> };
 
 export const diskStorage: Storage = {
   remote: false,
@@ -30,9 +32,10 @@ export const diskStorage: Storage = {
 };
 
 type Sender = { send(cmd: unknown): Promise<any> };
-export function r2Storage(client: Sender, bucket: string): Storage {
+export function r2Storage(client: Sender, bucket: string, sign?: (name: string) => Promise<string>): Storage {
   return {
     remote: true,
+    link: sign,
     async put(name, body, mime) { await client.send(new PutObjectCommand({ Bucket: bucket, Key: name, Body: body, ContentType: mime, CacheControl: "public, max-age=31536000, immutable" })); },
     async get(name) {
       try {
@@ -49,6 +52,7 @@ export function r2Storage(client: Sender, bucket: string): Storage {
 /** R2 for new images; the disk is still consulted for older ones (and cleaned alongside). */
 export const layered = (remote: Storage): Storage => ({
   remote: true,
+  link: remote.link,
   put: (n, b, m) => remote.put(n, b, m),
   async get(n) { return (await diskStorage.get(n)) ?? remote.get(n); },
   async del(n) { await diskStorage.del(n); await remote.del(n).catch((e) => console.error("[uploads] R2 delete failed", n, e?.name ?? e)); },
@@ -57,7 +61,14 @@ export const layered = (remote: Storage): Storage => ({
 function fromEnv(): Storage {
   const { R2_ACCOUNT_ID: acc, R2_BUCKET: bucket, R2_ACCESS_KEY_ID: id, R2_SECRET_ACCESS_KEY: secret } = process.env;
   if (!acc || !bucket || !id || !secret) return diskStorage;
-  return layered(r2Storage(new S3Client({ region: "auto", endpoint: `https://${acc}.r2.cloudflarestorage.com`, credentials: { accessKeyId: id, secretAccessKey: secret } }), bucket));
+  const client = new S3Client({ region: "auto", endpoint: `https://${acc}.r2.cloudflarestorage.com`, credentials: { accessKeyId: id, secretAccessKey: secret } });
+  // A link is signed as of the start of the (UTC) day and valid for 3 days, so it is the SAME address all day long: browsers keep the image
+  // cached instead of asking again, and a link handed out at 23:59 still has two days left.
+  const sign = (name: string) => {
+    const day = new Date(); day.setUTCHours(0, 0, 0, 0);
+    return getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: name, ResponseContentType: MIME[name.split(".")[1]], ResponseCacheControl: "public, max-age=86400" }), { expiresIn: 3 * 86400, signingDate: day });
+  };
+  return layered(r2Storage(client, bucket, sign));
 }
 export let storage: Storage = fromEnv();
 export const setStorage = (s: Storage) => { storage = s; }; // tests
@@ -122,7 +133,15 @@ export async function serveUpload(req: Request, res: Response) {
   const name = req.params.name;
   if (!NAME.test(name)) return res.status(404).json({ error: "Not found" }); // also blocks ../ tricks
   let found: Stored | null = null;
-  try { found = await storage.get(name); } catch (e) { console.error("[uploads] read failed", name, e); return res.status(502).json({ error: "Image storage is unavailable" }); }
+  try {
+    found = await diskStorage.get(name); // images that were uploaded before the move to R2 are still on this disk
+    if (!found && storage.link) { // everything else: send the browser to R2 itself (a private, signed, day-long link)
+      const url = await storage.link(name);
+      res.set({ "Cache-Control": "public, max-age=43200", "Cross-Origin-Resource-Policy": "cross-origin" });
+      return res.redirect(302, url);
+    }
+    if (!found) found = await storage.get(name);
+  } catch (e) { console.error("[uploads] read failed", name, e); return res.status(502).json({ error: "Image storage is unavailable" }); }
   if (!found) return res.status(404).json({ error: "Not found" });
   res.set({
     "Content-Type": MIME[name.split(".")[1]],
