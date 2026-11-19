@@ -70,9 +70,10 @@ export default function Profile() {
 
   return (
     // split view: profile + password on the left, projects on the right (only the projects list scrolls on wide screens)
-    <div className="mx-auto grid max-w-6xl gap-6 lg:h-full lg:grid-cols-[380px_minmax(0,1fr)]">
-      <div className="space-y-5 lg:overflow-y-auto lg:pr-1">
-        <section className="rounded-[28px] bg-white p-5 shadow-card">
+    // phones: one column in the order profile, projects, appearance, password, developer access (the left wrapper dissolves so the cards can be re-ordered)
+    <div className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)] gap-5 lg:h-full lg:grid-cols-[380px_minmax(0,1fr)] lg:gap-6">
+      <div className="min-w-0 space-y-5 max-lg:contents lg:overflow-y-auto lg:pr-1">
+        <section className="min-w-0 rounded-[28px] bg-white p-4 shadow-card max-lg:order-1 sm:p-5">
           <div className="flex items-center gap-3.5">
             <Avatar user={user} size={56} />
             <div className="min-w-0 flex-1">
@@ -93,33 +94,40 @@ export default function Profile() {
           {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
         </section>
 
-        <ChangePassword />
+        <div className="min-w-0 max-lg:order-4"><ChangePassword /></div>
 
-        <section className="flex items-center justify-between gap-3 rounded-[28px] bg-white p-5 shadow-card">
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-[28px] bg-white p-4 shadow-card max-lg:order-3 sm:p-5">
           <div><h3 className="font-semibold">Appearance</h3><p className="text-xs text-slate-500">Auto follows your device</p></div>
           <div className="flex gap-0.5 rounded-full bg-slate-200/70 p-1 text-xs font-medium">
             {(["auto", "light", "dark"] as const).map((c) => <button key={c} onClick={() => theme.set(c)} className={"rounded-full px-3 py-1.5 capitalize " + (theme.choice === c ? "bg-white text-slate-900 shadow-card" : "text-slate-600")}>{c}</button>)}
           </div>
         </section>
 
-        <button onClick={() => setDevOpen(true)} className="flex w-full items-center gap-3 rounded-[28px] bg-white p-5 text-left shadow-card transition hover:shadow-lift">
+        <div className="max-lg:order-5">
+        <button onClick={() => setDevOpen(true)} className="hidden w-full items-center gap-3 rounded-[28px] bg-white p-5 text-left shadow-card transition hover:shadow-lift sm:flex">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-600"><Bot className="h-5 w-5" /></span>
           <span className="min-w-0 flex-1"><span className="block font-semibold">Developer access</span><span className="block text-xs text-slate-500">Let Claude Code work on your assigned tasks</span></span>
           <ArrowRight className="h-4 w-4 text-slate-400" />
         </button>
+          {/* phones: shown but switched off (setting up developer access needs a computer) */}
+          <div aria-disabled="true" className="flex w-full cursor-not-allowed items-center gap-3 rounded-[28px] bg-white p-4 opacity-55 shadow-card sm:hidden">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-600"><Bot className="h-5 w-5" /></span>
+            <span className="min-w-0 flex-1"><span className="block font-semibold">Developer access</span><span className="block text-xs text-slate-500">Available on desktop only</span></span>
+          </div>
+        </div>
 
       </div>
 
-      <section className="flex min-h-0 flex-col rounded-[28px] bg-slate-200/50 p-4 lg:h-full">
-        <div className="mb-3 flex shrink-0 items-center justify-between px-1">
-          <h3 className="text-xl font-semibold tracking-tight">Your projects ({projects.length})</h3>
+      <section className="flex min-h-0 min-w-0 flex-col rounded-[28px] bg-slate-200/50 p-3 max-lg:order-2 sm:p-4 lg:h-full">
+        <div className="mb-3 flex shrink-0 items-center justify-between gap-2 px-1">
+          <h3 className="min-w-0 text-lg font-semibold tracking-tight sm:text-xl">Your projects ({projects.length})</h3>
           <button className={btnGhost} onClick={() => setNewProject(true)}><FolderPlus className="h-4 w-4" />New project</button>
         </div>
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1">
           {projects.length === 0 && <p className="rounded-[24px] bg-white p-6 text-sm text-slate-500 shadow-card">You’re not in any project yet. Create one, or ask a teammate to invite you.</p>}
-          <div className="grid gap-3 xl:grid-cols-2">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-3 xl:grid-cols-2">
             {projects.map((p) => (
-              <div key={p.id} className="flex flex-col rounded-[24px] bg-white p-5 shadow-card transition hover:shadow-lift">
+              <div key={p.id} className="flex min-w-0 flex-col rounded-[24px] bg-white p-4 shadow-card sm:p-5 transition hover:shadow-lift">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="truncate font-semibold">{p.name}</div>
@@ -128,7 +136,7 @@ export default function Profile() {
                   <span className="shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">{p.myRole}</span>
                 </div>
                 {p.description && <p className="mt-2 line-clamp-2 text-sm text-slate-500">{p.description}</p>}
-                <div className="mt-4 flex items-center justify-between">
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                   <span className="flex items-center gap-3">
                     {project?.id === p.id && <span className="text-xs font-medium text-emerald-600">● Currently open</span>}
                     {p.myRole === "ADMIN" && <button className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-rose-600" onClick={() => setToDelete(p)} title="Delete this project (admins only)"><Trash2 className="h-3.5 w-3.5" />Delete</button>}
