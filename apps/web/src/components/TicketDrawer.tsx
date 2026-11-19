@@ -14,9 +14,11 @@ import { Markdown } from "./Markdown";
 import { RichEditor } from "./RichEditor";
 
 /** Checklist inside the ticket, with a progress bar. Only people who can edit the ticket can change it. */
-function Subtasks({ ticketId, items, canEdit, refresh }: { ticketId: string; items: SubtaskRow[]; canEdit: boolean; refresh: () => void }) {
+function Subtasks({ ticketId, items, canEdit, refresh, assignees, userId, onReply }: { ticketId: string; items: SubtaskRow[]; canEdit: boolean; refresh: () => void; assignees: { id: string; name: string }[]; userId?: string; onReply: (s: SubtaskRow) => void }) {
   const [text, setText] = useState("");
-  const add = useMutation({ mutationFn: (title: string) => api(`/tickets/${ticketId}/subtasks`, { method: "POST", json: { title } }), onSuccess: () => { setText(""); refresh(); } });
+  const [who, setWho] = useState("");
+  const add = useMutation({ mutationFn: (title: string) => api(`/tickets/${ticketId}/subtasks`, { method: "POST", json: { title, assigneeId: who || null } }), onSuccess: () => { setText(""); refresh(); } });
+  const assign = useMutation({ mutationFn: (v: { id: string; assigneeId: string | null }) => api(`/subtasks/${v.id}`, { method: "PATCH", json: { assigneeId: v.assigneeId } }), onSuccess: refresh });
   const toggle = useMutation({ mutationFn: (v: { id: string; done: boolean }) => api(`/subtasks/${v.id}`, { method: "PATCH", json: { done: v.done } }), onSuccess: refresh });
   const remove = useMutation({ mutationFn: (id: string) => api(`/subtasks/${id}`, { method: "DELETE" }), onSuccess: refresh });
   const done = items.filter((s) => s.done).length;
@@ -26,18 +28,28 @@ function Subtasks({ ticketId, items, canEdit, refresh }: { ticketId: string; ite
       <div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-semibold">Subtasks {items.length > 0 && <span className="font-normal text-slate-400">({done}/{items.length})</span>}</h3></div>
       {items.length > 0 && <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{ width: `${(done / items.length) * 100}%` }} /></div>}
       <ul className="space-y-1">
-        {items.map((s) => (
+        {items.map((s) => {
+          const mine = s.assigneeId ? s.assigneeId === userId : canEdit; // only the assigned person ticks it
+          const owner = assignees.find((a) => a.id === s.assigneeId);
+          return (
           <li key={s.id} className="group flex items-center gap-2.5 rounded-xl px-2 py-1.5 hover:bg-slate-50">
-            <button type="button" disabled={!canEdit} aria-label={s.done ? "Mark as not done" : "Mark as done"} onClick={() => toggle.mutate({ id: s.id, done: !s.done })}
-              className={clsx("flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md border-2 transition", s.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 hover:border-indigo-400", !canEdit && "cursor-default")}>{s.done && <Check className="h-3 w-3" strokeWidth={3} />}</button>
+            <button type="button" disabled={!mine} title={mine ? undefined : owner ? `Only ${owner.name} can check this` : undefined} aria-label={s.done ? "Mark as not done" : "Mark as done"} onClick={() => toggle.mutate({ id: s.id, done: !s.done })}
+              className={clsx("flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md border-2 transition", s.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 hover:border-indigo-400", !mine && "cursor-not-allowed opacity-50")}>{s.done && <Check className="h-3 w-3" strokeWidth={3} />}</button>
             <span className={clsx("min-w-0 flex-1 break-words text-sm", s.done && "text-slate-400 line-through")}>{s.title}</span>
+            {canEdit ? (
+              <select value={s.assigneeId ?? ""} onChange={(e) => assign.mutate({ id: s.id, assigneeId: e.target.value || null })} className="max-w-[7rem] truncate rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 outline-none">
+                <option value="">Anyone</option>{assignees.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            ) : owner && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{owner.name}</span>}
+            {userId && <button type="button" aria-label="Reply to this subtask" title="Reply in comments" onClick={() => onReply(s)} className="text-slate-300 hover:text-indigo-600"><CornerDownRight className="h-4 w-4" /></button>}
             {canEdit && <button type="button" aria-label="Remove subtask" onClick={() => remove.mutate(s.id)} className="hidden text-slate-300 hover:text-rose-600 group-hover:block"><X className="h-4 w-4" /></button>}
           </li>
-        ))}
+        );})}
       </ul>
       {canEdit && (
-        <form className="mt-2" onSubmit={(e) => { e.preventDefault(); if (text.trim() && !add.isPending) add.mutate(text.trim()); }}>
-          <input value={text} maxLength={200} onChange={(e) => setText(e.target.value)} placeholder="Add a subtask and press Enter" className="w-full rounded-xl bg-slate-100 px-3.5 py-2 text-sm outline-none placeholder:text-slate-400 focus:bg-white focus:ring-4 focus:ring-indigo-500/15" />
+        <form className="mt-2 flex gap-1.5" onSubmit={(e) => { e.preventDefault(); if (text.trim() && !add.isPending) add.mutate(text.trim()); }}>
+          <input value={text} maxLength={200} onChange={(e) => setText(e.target.value)} placeholder="Add a subtask and press Enter" className="min-w-0 flex-1 rounded-xl bg-slate-100 px-3.5 py-2 text-sm outline-none placeholder:text-slate-400 focus:bg-white focus:ring-4 focus:ring-indigo-500/15" />
+          <select value={who} onChange={(e) => setWho(e.target.value)} aria-label="Assign subtask" className="w-28 rounded-xl bg-slate-100 px-2 text-xs text-slate-600 outline-none"><option value="">Anyone</option>{assignees.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select>
           {add.error && <p className="mt-1 text-xs text-rose-600">{(add.error as Error).message}</p>}
         </form>
       )}
@@ -180,7 +192,7 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
 
   return (
     <div className="anim-fade fixed inset-0 z-50 flex justify-end bg-black/25 backdrop-blur-sm" onMouseDown={onClose}>
-      <aside className="anim-slide flex h-full w-full flex-col overflow-hidden bg-white shadow-lift sm:w-[65vw] sm:min-w-[min(100%,720px)] sm:max-w-[1400px] sm:rounded-l-[32px]" onMouseDown={(e) => e.stopPropagation()}>
+      <aside className="anim-slide flex h-full w-full flex-col overflow-hidden bg-white shadow-lift sm:w-[96vw] sm:max-w-[2000px] sm:rounded-l-[32px]" onMouseDown={(e) => e.stopPropagation()}>
         {!t ? <p className="p-8 text-slate-500">Loading…</p> : (
           <>
             <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-8 py-4">
@@ -200,7 +212,7 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
             </header>
 
             {/* wide screens: two columns that scroll on their own; narrow screens: one scroll */}
-            <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_340px] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
               <>
                 {/* ---------- main column ---------- */}
                 <div className="min-w-0 space-y-7 p-8 lg:min-h-0 lg:overflow-y-auto">
@@ -232,8 +244,11 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                     ) : <p className="text-sm text-slate-400">No description</p>}
                   </section>
 
-                  <Subtasks ticketId={t.id} items={t.subtasks} canEdit={canEdit} refresh={refresh} />
+                  <Subtasks ticketId={t.id} items={t.subtasks} canEdit={canEdit} refresh={refresh} assignees={t.assignees} userId={user?.id} onReply={(s) => setComment((c) => (c ? c + "\n" : "") + `> Re subtask “${s.title}”${s.done ? " (done)" : ""}\n\n`)} />
+                </div>
 
+                {/* ---------- comments column ---------- */}
+                <div className="min-w-0 space-y-7 border-slate-100 p-8 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:px-6">
                   <section>
                     <h3 className="mb-3 text-sm font-semibold">Comments <span className="font-normal text-slate-400">({t.comments.length})</span></h3>
                     <div className="space-y-2.5">
@@ -259,7 +274,7 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                 </div>
 
                 {/* ---------- side column ---------- */}
-                <div className="min-w-0 space-y-5 p-8 lg:min-h-0 lg:overflow-y-auto lg:pl-4">
+                <div className="min-w-0 space-y-5 p-8 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-slate-100 lg:pl-6">
                   <div className="rounded-3xl bg-slate-50 p-5">
                     <fieldset disabled={!canEdit} className="m-0 min-w-0 space-y-4 border-0 p-0">
                       <div><Label>Status</Label>

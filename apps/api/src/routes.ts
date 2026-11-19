@@ -560,16 +560,20 @@ const touched = (t: { id: string; projectId: string; title: string; number: numb
 router.post("/tickets/:id/subtasks", wrap(async (req, res) => {
   const t = await subtaskTicket(req, res, req.params.id); if (!t) return;
   const title = subtaskTitle.parse(req.body?.title);
+  const assigneeId = z.string().nullish().parse(req.body?.assigneeId) ?? null;
+  if (assigneeId && !t.assignees.some((a) => a.userId === assigneeId)) return res.status(400).json({ error: "A subtask can only be assigned to someone assigned to this ticket" });
   if ((await prisma.subtask.count({ where: { ticketId: t.id } })) >= 50) return res.status(400).json({ error: "A ticket can have up to 50 subtasks" });
   const last = await prisma.subtask.findFirst({ where: { ticketId: t.id }, orderBy: { position: "desc" }, select: { position: true } });
-  const s = await prisma.subtask.create({ data: { ticketId: t.id, title, position: (last?.position ?? 0) + 1000 } });
+  const s = await prisma.subtask.create({ data: { ticketId: t.id, title, assigneeId, position: (last?.position ?? 0) + 1000 } });
   touched(t, req, `added subtask “${title}”`);
   res.status(201).json(s);
 }));
 router.patch("/subtasks/:id", wrap(async (req, res) => {
   const cur = await prisma.subtask.findUnique({ where: { id: req.params.id } }); if (!cur) return res.status(404).json({ error: "Not found" });
   const t = await subtaskTicket(req, res, cur.ticketId); if (!t) return;
-  const d = z.object({ title: subtaskTitle.optional(), done: z.boolean().optional() }).parse(req.body);
+  const d = z.object({ title: subtaskTitle.optional(), done: z.boolean().optional(), assigneeId: z.string().nullable().optional() }).parse(req.body);
+  if (d.assigneeId && !t.assignees.some((a) => a.userId === d.assigneeId)) return res.status(400).json({ error: "A subtask can only be assigned to someone assigned to this ticket" });
+  if (d.done !== undefined && cur.assigneeId && cur.assigneeId !== req.user!.id) return res.status(403).json({ error: "Only the person this subtask is assigned to can check or uncheck it." });
   const s = await prisma.subtask.update({ where: { id: cur.id }, data: d });
   if (d.done !== undefined && d.done !== cur.done) touched(t, req, `${d.done ? "completed" : "reopened"} subtask “${s.title}”`);
   res.json(s);
