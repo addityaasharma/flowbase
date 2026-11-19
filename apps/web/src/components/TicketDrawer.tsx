@@ -40,7 +40,7 @@ function PeoplePicker({ people, value, onChange }: { people: { id: string; name:
 }
 
 /** Checklist inside the ticket, with a progress bar. Only people who can edit the ticket can change it. */
-function Subtasks({ ticketId, items, canEdit, refresh, assignees, userId, onReply }: { ticketId: string; items: SubtaskRow[]; canEdit: boolean; refresh: () => void; assignees: { id: string; name: string }[]; userId?: string; onReply: (s: SubtaskRow) => void }) {
+function Subtasks({ ticketId, items, canEdit, refresh, assignees, userId, onReply, locked }: { locked?: boolean; ticketId: string; items: SubtaskRow[]; canEdit: boolean; refresh: () => void; assignees: { id: string; name: string }[]; userId?: string; onReply: (s: SubtaskRow) => void }) {
   const [text, setText] = useState("");
   const [who, setWho] = useState<string[]>([]);
   const [open, setOpen] = useState<string | null>(null); // the subtask whose options are expanded
@@ -57,7 +57,7 @@ function Subtasks({ ticketId, items, canEdit, refresh, assignees, userId, onRepl
       {items.length > 0 && <div className="mb-4 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{ width: `${(done / items.length) * 100}%` }} /></div>}
       <ul className="space-y-2">
         {items.map((s) => {
-          const mine = s.assigneeIds.length ? !!userId && s.assigneeIds.includes(userId) : canEdit; // only the assigned person ticks it
+          const mine = !locked && (s.assigneeIds.length ? !!userId && s.assigneeIds.includes(userId) : canEdit); // only the assigned person ticks it
           const owners = assignees.filter((a) => s.assigneeIds.includes(a.id));
           const opt = "flex items-center gap-1.5 rounded-full bg-slate-50 px-3.5 py-1.5 text-sm font-medium transition";
           return (
@@ -202,7 +202,11 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
   const t = q.data;
   const canDelete = !!user && !!t && t.reporter.id === user.id;                                                   // only the creator can delete
   const frozen = !!t && !!user && t.status === "BLOCKED" && !!t.dueDate && t.dueDate.slice(0, 10) < new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10) && t.reporter.id !== user.id; // overdue + blocked: only the creator may unblock / re-date
-  const canEdit = !!user && !!t && (t.reporter.id === user.id || t.assignees.some((a) => a.id === user.id));     // an assignee or the creator; others can comment
+  const canEditBase = !!user && !!t && (t.reporter.id === user.id || t.assignees.some((a) => a.id === user.id));
+  const locked = !!t && t.status === "BLOCKED"; // blocked: nothing can be changed until it is unblocked
+  const overdueNow = !!t?.dueDate && t.dueDate.slice(0, 10) < new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const canRedate = locked && overdueNow && !!user && t!.reporter.id === user.id; // the creator may still re-date an overdue blocked task
+  const canEdit = canEditBase && !locked;     // an assignee or the creator; others can comment
   const sendReply = () => { if (replyTo && replyText.trim() && !reply.isPending) reply.mutate({ parentId: replyTo.id, body: replyText }); };
   const startReply = (c: Comment, isReply: boolean) => { setReplyTo({ id: c.id, name: c.author.name }); setReplyText(isReply ? `@[${c.author.name}](u:${c.author.id}) ` : ""); };
   const send = () => { if (comment.trim() && !addComment.isPending) addComment.mutate(); };
@@ -262,7 +266,10 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
               <>
                 {/* ---------- main column ---------- */}
                 <div className="min-w-0 space-y-5 p-4 sm:space-y-7 sm:p-8 lg:min-h-0 lg:overflow-y-auto">
-                  {user && !canEdit && (
+                  {user && locked && canEditBase && (
+                    <p className="flex items-center gap-2 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700"><Lock className="h-3.5 w-3.5 shrink-0" />Blocked: change the status to unblock it before making other changes. You can still comment.</p>
+                  )}
+                  {user && !canEditBase && (
                     <p className="flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800"><Lock className="h-3.5 w-3.5 shrink-0" />View only: this ticket isn’t assigned to you. You can still comment.</p>
                   )}
                   <fieldset disabled={!canEdit} className="m-0 min-w-0 border-0 p-0">
@@ -290,7 +297,7 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                     ) : <p className="text-sm text-slate-400">No description</p>}
                   </section>
 
-                  <Subtasks ticketId={t.id} items={t.subtasks} canEdit={canEdit} refresh={refresh} assignees={t.assignees} userId={user?.id} onReply={(s) => setComment((c) => (c ? c + "\n" : "") + `> Re subtask “${s.title}”${s.done ? " (done)" : ""}\n\n`)} />
+                  <Subtasks ticketId={t.id} items={t.subtasks} canEdit={canEdit} refresh={refresh} assignees={t.assignees} userId={user?.id} locked={locked} onReply={(s) => setComment((c) => (c ? c + "\n" : "") + `> Re subtask “${s.title}”${s.done ? " (done)" : ""}\n\n`)} />
                 </div>
 
                 {/* ---------- comments column ---------- */}
@@ -323,17 +330,25 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                 <div className="min-w-0 space-y-5 border-t border-slate-100 p-4 sm:p-8 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-t-0 lg:pl-6">
                   <div className="rounded-3xl bg-slate-50 p-5">
                     {frozen && <p className="mb-3 flex items-start gap-2 rounded-2xl bg-rose-50 px-3.5 py-2.5 text-xs text-rose-700"><Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />Overdue and blocked. Only {t.reporter.name}, who created this task, can unblock it or change its due date.</p>}
-                    <fieldset disabled={!canEdit} className="m-0 min-w-0 space-y-4 border-0 p-0">
+                    <div className="space-y-4">
+                    <fieldset disabled={!canEditBase || frozen} className="m-0 min-w-0 border-0 p-0">
                       <div><Label>Status</Label>
-                        <select disabled={frozen} className={inputCls + " bg-white disabled:opacity-60"} value={t.status} onChange={(e) => patch.mutate({ status: e.target.value })}>{STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}</select></div>
+                        <select className={inputCls + " bg-white disabled:opacity-60"} value={t.status} onChange={(e) => patch.mutate({ status: e.target.value })}>{STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}</select></div>
+                    </fieldset>
+                    <fieldset disabled={!canEdit} className="m-0 min-w-0 space-y-4 border-0 p-0">
                       <div><Label>Priority</Label>
                         <select className={inputCls + " bg-white"} value={t.priority} onChange={(e) => patch.mutate({ priority: e.target.value })}>{PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>)}</select></div>
                       <div><Label>Assigned to · {t.assignees.length} {t.assignees.length === 1 ? "person" : "people"}</Label>
                         <AssigneePicker members={members} value={t.assignees.map((a) => a.id)} disabled={!canEdit} onChange={(ids) => patch.mutate({ assigneeIds: ids })} /></div>
-                      <div><Label>Due date</Label>
-                        <input type="date" disabled={frozen} className={inputCls + " min-w-0 max-w-full appearance-none bg-white disabled:opacity-60"} value={t.dueDate?.slice(0, 10) ?? ""} onChange={(e) => patch.mutate({ dueDate: e.target.value || null })} /></div>
-                      <div className="max-sm:hidden"><Label>Labels</Label><LabelsEditor labels={t.labels} onChange={(labels) => patch.mutate({ labels })} /></div>
                     </fieldset>
+                    <fieldset disabled={!(canEdit || canRedate)} className="m-0 min-w-0 border-0 p-0">
+                      <div><Label>Due date</Label>
+                        <input type="date" className={inputCls + " min-w-0 max-w-full appearance-none bg-white disabled:opacity-60"} value={t.dueDate?.slice(0, 10) ?? ""} onChange={(e) => patch.mutate({ dueDate: e.target.value || null })} /></div>
+                    </fieldset>
+                    <fieldset disabled={!canEdit} className="m-0 min-w-0 border-0 p-0 max-sm:hidden">
+                      <div><Label>Labels</Label><LabelsEditor labels={t.labels} onChange={(labels) => patch.mutate({ labels })} /></div>
+                    </fieldset>
+                    </div>
                   </div>
 
                   <div className="max-sm:hidden"><DevBox t={t} canEdit={canEdit} refresh={refresh} /></div>

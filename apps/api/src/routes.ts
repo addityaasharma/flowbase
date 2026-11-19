@@ -10,7 +10,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { requireAuth, signToken } from "./auth";
 import { rateLimit } from "./rateLimit";
-import { OVERDUE_LOCK_MSG, overdueBlocked } from "./lock";
+import { BLOCKED_MSG, OVERDUE_LOCK_MSG, overdueBlocked } from "./lock";
 import { sendAssignmentEmail, sendInviteEmail, sendMentionEmail, sendPasswordResetEmail, sendSubtaskReminderEmail, sendVerifyEmail } from "./mail";
 import { grant, openStream, publish, revoke } from "./events";
 import { notify, ticketAudience } from "./notifications";
@@ -485,6 +485,10 @@ router.patch("/tickets/:id", wrap(async (req, res) => {
   if (!canEditTicket(t, req.user!.id)) return res.status(403).json(NOT_ALLOWED);
   const d = updateTicketSchema.parse(req.body);
   if (overdueBlocked(t) && t.reporterId !== req.user!.id && ((d.status !== undefined && d.status !== t.status) || d.dueDate !== undefined)) return res.status(403).json({ error: OVERDUE_LOCK_MSG });
+  if (t.status === "BLOCKED") { // a blocked task is frozen: the only thing you can do is unblock it (the creator may also re-date an overdue one)
+    const ok = Object.entries(d).every(([k, v]) => v === undefined || k === "status" || (k === "dueDate" && overdueBlocked(t) && t.reporterId === req.user!.id));
+    if (!ok) return res.status(409).json({ error: BLOCKED_MSG });
+  }
   if (!(await assigneesOk(res, t.projectId, d.assigneeIds))) return;
   const { dueDate, assigneeIds, ...rest } = d;
   const ops: Prisma.PrismaPromise<unknown>[] = [prisma.ticket.update({ where: { id: t.id }, data: { ...rest, ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}) } })];
@@ -554,6 +558,7 @@ async function subtaskTicket(req: Request, res: Response, ticketId: string) {
   const t = await prisma.ticket.findUnique({ where: { id: ticketId }, include: ticketInclude });
   if (!t || !(await memberOf(req.user!.id, t.projectId))) { res.status(404).json({ error: "Not found" }); return null; }
   if (!canEditTicket(t, req.user!.id)) { res.status(403).json(NOT_ALLOWED); return null; }
+  if (t.status === "BLOCKED") { res.status(409).json({ error: BLOCKED_MSG }); return null; } // subtasks, reminders and repos wait until it is unblocked
   return t;
 }
 const SUBTASK_PEOPLE = "A subtask can only be assigned to people assigned to this ticket";

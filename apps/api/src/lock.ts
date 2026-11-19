@@ -1,3 +1,4 @@
+export const BLOCKED_MSG = "This task is blocked. Unblock it first, then you can make changes.";
 /** An overdue task that sits in Blocked is frozen: only the person who created it may unblock it or change its due date. */
 export const OVERDUE_LOCK_MSG = "This task is overdue and blocked. Only the person who created it can unblock it or change its due date.";
 export function overdueBlocked(t: { status: string; dueDate: Date | null }, now = new Date()): boolean {

@@ -121,7 +121,9 @@ describe("who can change a ticket", () => {
     expect((await api().patch(`/api/tickets/${t.id}`).set(auth(bob.token)).send({ status: "IN_PROGRESS" })).status).toBe(403);
     expect((await api().patch(`/api/tickets/${t.id}`).set(auth(bob.token)).send({ dueDate: "2030-01-01" })).status).toBe(403);
     expect((await api().post(`/api/tickets/${t.id}/move`).set(auth(bob.token)).send({ status: "TODO" })).status).toBe(403);
-    expect((await api().patch(`/api/tickets/${t.id}`).set(auth(bob.token)).send({ priority: "HIGH" })).status).toBe(200); // other edits are fine
+    expect((await api().patch(`/api/tickets/${t.id}`).set(auth(bob.token)).send({ priority: "HIGH" })).status).toBe(409); // blocked = frozen until unblocked
+    expect((await api().post(`/api/tickets/${t.id}/subtasks`).set(auth(bob.token)).send({ title: "x" })).status).toBe(409);
+    expect((await api().post(`/api/tickets/${t.id}/comments`).set(auth(bob.token)).send({ body: "why blocked?" })).status).toBe(201); // discussing is still fine
     expect((await api().post(`/api/tickets/${t.id}/move`).set(auth(alice.token)).send({ status: "IN_PROGRESS" })).status).toBe(200);
     await api().post(`/api/tickets/${t.id}/move`).set(auth(alice.token)).send({ status: "DONE" }); // keep it out of later "open tasks" assertions
   });
