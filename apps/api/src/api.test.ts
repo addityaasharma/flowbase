@@ -299,6 +299,7 @@ describe("image uploads", () => {
       const o = bucket.get(i.Key); if (!o) throw Object.assign(new Error("nope"), { name: "NoSuchKey" });
       return { Body: Readable.from(o.body), ContentLength: o.body.length };
     } };
+    const original = realStorage; // (an imported live binding: read it BEFORE swapping, or "restoring" would restore the fake)
     const withR2 = layered(r2Storage(fake, "test-bucket", async (n) => `https://r2.test/test-bucket/${n}?sig=abc`));
     setStorage(withR2);
     try {
@@ -319,7 +320,7 @@ describe("image uploads", () => {
       await withR2.del(name);
       expect(bucket.has(name)).toBe(false);
       await prisma.upload.deleteMany({ where: { name } });
-    } finally { setStorage(realStorage); }
+    } finally { setStorage(original); }
   });
   it("never serves anything outside the uploads folder", async () => {
     for (const p of ["/api/uploads/..%2f..%2fpackage.json", "/api/uploads/00000000000000000000000000000000.png", "/api/uploads/x.png"]) expect((await api().get(p)).status).toBe(404);
