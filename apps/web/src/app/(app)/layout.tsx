@@ -23,9 +23,9 @@ import { RealtimeProvider, useRealtime } from "@/lib/realtime";
 import { STATUSES } from "@bitcode/shared";
 
 const TABS = [
-  { href: "/", label: "Board", icon: LayoutGrid },
-  { href: "/tickets", label: "All Tickets", icon: ListChecks },
-  { href: "/team", label: "Team & Roles", icon: Users },
+  { href: "/", label: "Board", short: "Board", icon: LayoutGrid },
+  { href: "/tickets", label: "All Tickets", short: "Tickets", icon: ListChecks },
+  { href: "/team", label: "Team & Roles", short: "Teams", icon: Users },
 ];
 
 function Welcome() {
@@ -112,10 +112,10 @@ function Shell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex w-full items-center gap-2 sm:w-auto">
           {hasProject && <nav className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto rounded-full bg-slate-200/70 p-1 sm:w-auto sm:flex-none">
-            {TABS.map(({ href, label, icon: I }) => (
+            {TABS.map(({ href, label, short, icon: I }) => (
               <Link key={href} href={href} className={clsx("flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition sm:flex-none sm:px-4",
                 path === href ? "bg-white text-slate-900 shadow-card" : "text-slate-600 hover:text-slate-900")}>
-                <I className="h-4 w-4" />{label}
+                <I className="h-4 w-4" /><span className="sm:hidden">{short}</span><span className="hidden sm:inline">{label}</span>
               </Link>
             ))}
           </nav>}
