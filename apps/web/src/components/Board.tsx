@@ -95,8 +95,8 @@ function Tile({ t, onOpen }: { t: Ticket; onOpen: () => void }) {
   );
 }
 
-function DraggableCard({ t, hidden, landing, movable, mover, onOpen, onAdvance, onDenied, mini }: {
-  mini?: boolean; t: Ticket; hidden: boolean; landing: boolean; movable: boolean; mover?: string; onOpen: () => void; onAdvance: (to: Status) => void; onDenied?: () => void;
+function DraggableCard({ t, hidden, landing, movable, mover, onOpen, onAdvance, onDenied, mini, mobile, onLongPress }: {
+  mini?: boolean; mobile?: boolean; onLongPress?: () => void; t: Ticket; hidden: boolean; landing: boolean; movable: boolean; mover?: string; onOpen: () => void; onAdvance: (to: Status) => void; onDenied?: () => void;
 }) {
   const press = useRef<{ x: number; y: number; fired: boolean } | null>(null);
   // locked card: if the pointer is pressed and dragged a few pixels, tell the user why it will not move
@@ -111,10 +111,18 @@ function DraggableCard({ t, hidden, landing, movable, mover, onOpen, onAdvance, 
     onPointerCancel: () => { press.current = null; },
   };
   // only the assignee or creator may drag; everyone else can open and comment
-  const { attributes, listeners, setNodeRef } = useDraggable({ id: t.id, disabled: !movable });
+  const { attributes, listeners, setNodeRef } = useDraggable({ id: t.id, disabled: !movable || mobile });
+  // phones: no dragging (it fights scrolling); press and hold opens a "Move to" menu instead
+  const hold = useRef<{ timer: number; x: number; y: number } | null>(null);
+  const cancelHold = () => { if (hold.current) { clearTimeout(hold.current.timer); hold.current = null; } };
+  const holdHandlers = {
+    onPointerDown: (e: React.PointerEvent) => { cancelHold(); hold.current = { x: e.clientX, y: e.clientY, timer: window.setTimeout(() => { hold.current = null; onLongPress?.(); }, 450) }; },
+    onPointerMove: (e: React.PointerEvent) => { const h = hold.current; if (h && Math.hypot(e.clientX - h.x, e.clientY - h.y) > 8) cancelHold(); },
+    onPointerUp: cancelHold, onPointerCancel: cancelHold, onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+  };
   return (
-    <div ref={setNodeRef} data-card-id={t.id} {...(movable ? { ...attributes, ...listeners } : lockedHandlers)}
-      className={clsx("relative", !mini && "pb-3", movable && "touch-none cursor-grab", hidden && "hidden", landing && "opacity-0")}>
+    <div ref={setNodeRef} data-card-id={t.id} {...(mobile ? (movable ? holdHandlers : {}) : movable ? { ...attributes, ...listeners } : lockedHandlers)}
+      className={clsx("relative", !mini && "pb-3", movable && !mobile && "touch-none cursor-grab", mobile && "select-none [-webkit-touch-callout:none]", hidden && "hidden", landing && "opacity-0")}>
       {mover && <span className="absolute right-4 top-2 z-10 rounded-full bg-indigo-600 px-2.5 py-0.5 text-[11px] font-medium text-white shadow-card">{mover} is moving…</span>}
       <div className={clsx("transition-opacity duration-200", mover && "opacity-45")}>{mini ? <Tile t={t} onOpen={onOpen} /> : <Card t={t} onOpen={onOpen} onAdvance={onAdvance} canAdvance={movable} />}</div>
     </div>
@@ -204,6 +212,9 @@ export function Board() {
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
   };
   const resetWidths = () => { setWidths({}); saveWidths({}); };
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => { const m = window.matchMedia("(max-width: 639px)"); const f = () => setMobile(m.matches); f(); m.addEventListener("change", f); return () => m.removeEventListener("change", f); }, []);
+  const [menuFor, setMenuFor] = useState<Ticket | null>(null); // phone: the card whose "Move to" menu is open
   const targetRef = useRef<{ col: Status; index: number } | null>(null);
   // Local optimistic move: applied in the same render as the drop, so the real card is already in its new slot
   // when the drop animation measures it (the query cache notifies React a tick later).
@@ -217,7 +228,7 @@ export function Board() {
   const [dragH, setDragH] = useState(120);
   const [dragMini, setDragMini] = useState(false); // the card being dragged is a small dice tile
   const [landingId, setLandingId] = useState<string | null>(null);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: user ? 6 : 100000 } }));
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: user && !mobile ? 6 : 100000 } }));
   const active = activeId ? tickets.find((t) => t.id === activeId) ?? null : null;
 
   type MoveVars = { id: string; status: Status; beforeId: string | null; afterId: string | null; position: number; projectId: string };
@@ -330,7 +341,7 @@ export function Board() {
                         {mini
                           ? (openAt === idx && <div className="h-14 w-14 rounded-2xl border-2 border-dashed border-indigo-300 bg-indigo-100/50" />)
                           : <Slot open={openAt === idx} height={dragH} ghost={ghosts.find((g) => g.pos === idx)} />}
-                        <DraggableCard mini={mini} t={t} hidden={false} landing={landingId === t.id} movable={canMove(t)} mover={remoteDrags[t.id]?.actorName} onDenied={() => denied(t)} onOpen={() => openTicket(t.id)} onAdvance={(to) => advance(t, to)} />
+                        <DraggableCard mini={mini} mobile={mobile} onLongPress={() => setMenuFor(t)} t={t} hidden={false} landing={landingId === t.id} movable={canMove(t)} mover={remoteDrags[t.id]?.actorName} onDenied={() => denied(t)} onOpen={() => openTicket(t.id)} onAdvance={(to) => advance(t, to)} />
                       </div>
                     ))}
                     {/* the dragged card stays mounted (hidden) so dnd-kit keeps its node */}
@@ -350,6 +361,23 @@ export function Board() {
         })}
       </div>
       </div>
+      {menuFor && (
+        <div className="anim-fade fixed inset-0 z-50 flex items-end bg-black/30" onClick={() => setMenuFor(null)}>
+          <div className="w-full rounded-t-[28px] bg-white p-4 pb-6 shadow-lift" onClick={(e) => e.stopPropagation()}>
+            <p className="px-2 pb-1 text-xs font-semibold text-slate-400">{menuFor.key}</p>
+            <p className="px-2 pb-3 text-[15px] font-semibold leading-snug">{menuFor.title}</p>
+            <p className="px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Move to</p>
+            <div className="space-y-1">
+              {STATUSES.filter((x) => x !== menuFor.status).map((x) => (
+                <button key={x} type="button" onClick={() => { const t = menuFor; setMenuFor(null); advance(t, x); }} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-[15px] font-medium hover:bg-slate-50 active:bg-slate-100">
+                  <span className={clsx("h-3 w-3 rounded-full", STATUS_DOT[x])} />{STATUS_LABEL[x]}
+                </button>
+              ))}
+            </div>
+            <button type="button" onClick={() => setMenuFor(null)} className="mt-2 w-full rounded-2xl bg-slate-100 py-3 text-[15px] font-medium text-slate-600">Cancel</button>
+          </div>
+        </div>
+      )}
       <DragOverlay dropAnimation={dropAnimation}>{active && (dragMini ? <Tile t={active} onOpen={noop} /> : <Card t={active} onOpen={() => {}} onAdvance={() => {}} overlay />)}</DragOverlay>
     </DndContext>
   );

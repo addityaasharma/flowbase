@@ -95,7 +95,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <VerifyBanner />
       <header className="glass z-40 shrink-0 border-b border-black/5">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-x-4 gap-y-2.5 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-2.5">
+          <div className="flex w-full items-center gap-2.5 sm:w-auto">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-800 shadow-card ring-1 ring-black/5"><FlowbaseMark className="h-[18px] w-auto" /></span>
             <div>
               <div className="flex items-center gap-2">
@@ -108,8 +108,10 @@ function Shell({ children }: { children: React.ReactNode }) {
                 {w.projects.map((p) => <option key={p.id} value={p.id}>{p.name} • {p.members.length} Members</option>)}
               </select> : <p className="text-xs text-slate-500">Work tracking for teams</p>}
             </div>
+            {user && <Link href="/profile" title="Your profile" aria-label="Your profile" className={clsx("ml-auto shrink-0 rounded-full sm:hidden", path === "/profile" && "ring-2 ring-indigo-400")}><Avatar user={user} size={36} /></Link>}
           </div>
-          {hasProject && <nav className="flex w-full gap-0.5 overflow-x-auto rounded-full bg-slate-200/70 p-1 sm:w-auto">
+          <div className="flex w-full items-center gap-2 sm:w-auto">
+          {hasProject && <nav className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto rounded-full bg-slate-200/70 p-1 sm:w-auto sm:flex-none">
             {TABS.map(({ href, label, icon: I }) => (
               <Link key={href} href={href} className={clsx("flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition sm:flex-none sm:px-4",
                 path === href ? "bg-white text-slate-900 shadow-card" : "text-slate-600 hover:text-slate-900")}>
@@ -117,6 +119,8 @@ function Shell({ children }: { children: React.ReactNode }) {
               </Link>
             ))}
           </nav>}
+          <div className="shrink-0 sm:hidden"><NotificationBell /></div>
+          </div>
           <div className="flex w-full items-center justify-between gap-2 sm:flex-wrap sm:gap-3">
             <div className="flex min-w-0 items-center gap-2 sm:flex-wrap sm:gap-3">
             {hasProject && <>
@@ -125,7 +129,7 @@ function Shell({ children }: { children: React.ReactNode }) {
               <option value="unassigned">Unassigned</option>
               {w.project?.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
-            <button className={btnPrimary + " shrink-0 !px-3.5 py-2.5 shadow-card sm:!px-5"} onClick={() => requireAuth(() => w.setRaise(true))}><Plus className="h-4 w-4" /><span className="sm:hidden max-[380px]:hidden">Raise</span><span className="hidden sm:inline">Raise Ticket</span></button></>}
+            <button className={btnPrimary + " max-sm:hidden shrink-0 !px-3.5 py-2.5 shadow-card sm:!px-5"} onClick={() => requireAuth(() => w.setRaise(true))}><Plus className="h-4 w-4" /><span className="sm:hidden max-[380px]:hidden">Raise</span><span className="hidden sm:inline">Raise Ticket</span></button></>}
             <button aria-label="New project" className="hidden shrink-0 items-center gap-2 rounded-full sm:inline-flex bg-slate-200/70 px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-200 sm:px-4"
               onClick={() => requireAuth(() => w.setNewProject(true))}><FolderPlus className="h-4 w-4" />New Project</button>
             </div>
@@ -133,9 +137,9 @@ function Shell({ children }: { children: React.ReactNode }) {
             <button onClick={theme.toggle} title={theme.dark ? "Switch to light mode" : "Switch to dark mode"} aria-label="Toggle dark mode" className="hidden h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200/70 hover:text-slate-900 md:flex">{theme.dark ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}</button>
             <button onClick={() => setHelp(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" className="hidden h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200/70 hover:text-slate-900 md:flex"><Keyboard className="h-[18px] w-[18px]" /></button>
             {hasProject && <div className="hidden sm:block"><OnlinePill /></div>}
-            <NotificationBell />
+            <div className="hidden sm:block"><NotificationBell /></div>
             {user ? (
-              <div className="flex items-center gap-1.5">
+              <div className="hidden items-center gap-1.5 sm:flex">
                 <Link href="/profile" title="Your profile" className={clsx("flex items-center gap-2 rounded-full py-1 pl-1 pr-3 text-sm font-medium transition", path === "/profile" ? "bg-white shadow-card" : "hover:bg-slate-200/70")}>
                   <Avatar user={user} size={32} /><span className="hidden max-w-24 truncate sm:inline">{user.name.split(" ")[0]}</span>
                 </Link>
@@ -170,6 +174,10 @@ function Shell({ children }: { children: React.ReactNode }) {
         )}
       </header>
       {hasProject && (path === "/" || path === "/tickets") && <FilterBar />}
+      {hasProject && !w.openId && !w.raise && (
+        <button type="button" aria-label="Raise ticket" onClick={() => requireAuth(() => w.setRaise(true))}
+          className="fixed bottom-5 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lift transition active:scale-95 sm:hidden"><Plus className="h-6 w-6" /></button>
+      )}
       <main className="min-h-0 w-full flex-1 overflow-y-auto"><div className="mx-auto h-full max-w-[1600px] px-4 pb-6 pt-4 sm:px-6 sm:pt-5">{loading ? null : empty && !(user && path === "/profile") ? <Welcome /> : children}</div></main>
       {help && <ShortcutsHelp onClose={() => setHelp(false)} />}
       <SignInPopover />

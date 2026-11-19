@@ -1,11 +1,12 @@
 import "./globals.css";
 import { Inter } from "next/font/google";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Providers } from "@/components/Providers";
 import { THEME_BOOT } from "@/lib/theme";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
+export const viewport: Viewport = { width: "device-width", initialScale: 1, maximumScale: 1, userScalable: false }; // no pinch / focus zoom
 export const metadata: Metadata = { title: "Flowbase", description: "Plan, track and ship work with your team" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
