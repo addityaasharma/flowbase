@@ -327,12 +327,12 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                       <div><Label>Assigned to · {t.assignees.length} {t.assignees.length === 1 ? "person" : "people"}</Label>
                         <AssigneePicker members={members} value={t.assignees.map((a) => a.id)} disabled={!canEdit} onChange={(ids) => patch.mutate({ assigneeIds: ids })} /></div>
                       <div><Label>Due date</Label>
-                        <input type="date" disabled={frozen} className={inputCls + " bg-white disabled:opacity-60"} value={t.dueDate?.slice(0, 10) ?? ""} onChange={(e) => patch.mutate({ dueDate: e.target.value || null })} /></div>
-                      <div><Label>Labels</Label><LabelsEditor labels={t.labels} onChange={(labels) => patch.mutate({ labels })} /></div>
+                        <input type="date" disabled={frozen} className={inputCls + " min-w-0 max-w-full appearance-none bg-white disabled:opacity-60"} value={t.dueDate?.slice(0, 10) ?? ""} onChange={(e) => patch.mutate({ dueDate: e.target.value || null })} /></div>
+                      <div className="max-sm:hidden"><Label>Labels</Label><LabelsEditor labels={t.labels} onChange={(labels) => patch.mutate({ labels })} /></div>
                     </fieldset>
                   </div>
 
-                  <DevBox t={t} canEdit={canEdit} refresh={refresh} />
+                  <div className="max-sm:hidden"><DevBox t={t} canEdit={canEdit} refresh={refresh} /></div>
 
                   <section className="px-1">
                     <button type="button" onClick={() => setShowActivity((v) => !v)} aria-expanded={showActivity}

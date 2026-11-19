@@ -36,8 +36,8 @@ export function RaiseTicket({ onClose }: { onClose: () => void }) {
           <label className="text-xs font-medium text-slate-500">Status{sel("status", STATUSES, (v) => STATUS_LABEL[v as keyof typeof STATUS_LABEL])}</label>
           <div className="col-span-2 text-xs font-medium text-slate-500"><div className="mb-1">Assignees {assignees.length > 0 && <span className="text-slate-400">· {assignees.length} selected</span>}</div>
             <AssigneePicker members={members} value={assignees} onChange={setAssignees} /></div>
-          <label className="text-xs font-medium text-slate-500">Due date<input type="date" min={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)} className={inputCls} value={f.dueDate} onChange={(e) => set("dueDate", e.target.value)} /></label>
-          <label className="text-xs font-medium text-slate-500">Labels (comma separated)<input className={inputCls} value={f.labels} onChange={(e) => set("labels", e.target.value)} /></label>
+          <label className="min-w-0 text-xs font-medium text-slate-500 max-sm:col-span-2">Due date<input type="date" min={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)} className={inputCls + " min-w-0 max-w-full appearance-none "} value={f.dueDate} onChange={(e) => set("dueDate", e.target.value)} /></label>
+          <label className="text-xs font-medium text-slate-500 max-sm:hidden">Labels (comma separated)<input className={inputCls} value={f.labels} onChange={(e) => set("labels", e.target.value)} /></label>
         </div>
         {m.error && <p className="text-sm text-rose-600">{(m.error as Error).message}</p>}
         <div className="flex justify-end gap-2 pt-2">
