@@ -6,7 +6,7 @@ import {
 } from "@dnd-kit/core";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { ArrowRight, CheckSquare, MessageSquare } from "lucide-react";
+import { ArrowRight, CheckSquare, MessageSquare, RotateCcw } from "lucide-react";
 import type { Priority } from "@bitcode/shared";
 import { STATUSES, STATUS_LABEL, type Status } from "@bitcode/shared";
 import { api } from "@/lib/api";
@@ -304,7 +304,13 @@ export function Board() {
 
   return (
     <DndContext sensors={sensors} collisionDetection={collide} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={onDragCancel}>
-      <div className="flex h-full snap-x snap-mandatory gap-4 overflow-x-auto pb-1 sm:snap-none" onDoubleClick={(e) => { if ((e.target as HTMLElement).closest("[title^='Drag to resize']")) resetWidths(); }}>
+      <div className="flex h-full flex-col">
+      {Object.keys(widths).length > 0 && (
+        <div className="mb-2 hidden shrink-0 justify-end sm:flex">
+          <button type="button" onClick={resetWidths} className="flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 shadow-card transition hover:text-indigo-600"><RotateCcw className="h-3.5 w-3.5" />Reset column sizes</button>
+        </div>
+      )}
+      <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-4 overflow-x-auto pb-1 sm:snap-none" onDoubleClick={(e) => { if ((e.target as HTMLElement).closest("[title^='Drag to resize']")) resetWidths(); }}>
         {STATUSES.map((s, i) => {
           const visible = cols[s].filter((t) => t.id !== activeId);
           const openAt = target?.col === s ? target.index : -1;
@@ -339,6 +345,7 @@ export function Board() {
             </Column>
           );
         })}
+      </div>
       </div>
       <DragOverlay dropAnimation={dropAnimation}>{active && <Card t={active} onOpen={() => {}} onAdvance={() => {}} overlay />}</DragOverlay>
     </DndContext>
