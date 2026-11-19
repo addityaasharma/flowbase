@@ -137,6 +137,7 @@ describe("who can change a ticket", () => {
   });
   it("resend confirmation is not sent twice in a row", async () => {
     const hal = await signUp("Hal", false);
+    for (let i = 0; i < 40 && !(await prisma.authToken.count({ where: { userId: hal.id, kind: "verify" } })); i++) await new Promise((r) => setTimeout(r, 50)); // sign-up emails in the background
     const before = await prisma.authToken.count({ where: { userId: hal.id, kind: "verify" } });
     const r = await api().post("/api/auth/resend-verification").set(auth(hal.token));
     expect(r.status).toBe(200); expect(r.body.throttled).toBe(true); // sign-up just sent one
