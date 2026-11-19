@@ -27,7 +27,7 @@ function PeoplePicker({ people, value, onChange }: { people: { id: string; name:
         ) : <span className="flex h-5 w-5 items-center justify-center rounded-full border border-dashed border-slate-400 text-slate-400">+</span>}
         <span className="max-w-[9rem] truncate">{picked.length ? picked.map((p) => p.name.split(" ")[0]).join(", ") : "Assign"}</span>
       </summary>
-      <div className="absolute left-0 z-20 mt-1.5 w-56 rounded-2xl bg-white p-1.5 shadow-lift ring-1 ring-slate-200">
+      <div className="absolute right-0 z-20 mt-1.5 w-56 max-w-[80vw] rounded-2xl bg-white p-1.5 shadow-lift ring-1 ring-slate-200">
         {people.length === 0 && <p className="px-2.5 py-1.5 text-xs text-slate-400">Assign people to the ticket first</p>}
         {people.map((p) => (
           <label key={p.id} className="flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm hover:bg-slate-50">
