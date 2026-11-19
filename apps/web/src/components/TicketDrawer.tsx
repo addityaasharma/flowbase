@@ -61,7 +61,9 @@ function Subtasks({ ticketId, items, canEdit, refresh, assignees, userId, onRepl
           const owners = assignees.filter((a) => s.assigneeIds.includes(a.id));
           const opt = "flex items-center gap-1.5 rounded-full bg-slate-50 px-3.5 py-1.5 text-sm font-medium transition";
           return (
-          <li key={s.id} className={clsx("flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl px-3.5 py-2.5 ring-1 transition", s.done ? "bg-slate-50/60 ring-slate-100" : "bg-white ring-slate-200 hover:ring-indigo-200")}>
+          <li key={s.id} className={clsx("rounded-2xl px-3.5 py-2.5 ring-1 transition", s.done ? "bg-slate-50/60 ring-slate-100" : "bg-white ring-slate-200 hover:ring-indigo-200")}>
+            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
             <button type="button" disabled={!mine} title={mine ? undefined : owners.length ? `Only ${owners.map((o) => o.name).join(", ")} can check this` : undefined} aria-label={s.done ? "Mark as not done" : "Mark as done"} onClick={() => toggle.mutate({ id: s.id, status: s.done ? "TODO" : "DONE" })}
               className={clsx("flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border-2 transition", s.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 hover:border-indigo-400", !mine && "cursor-not-allowed opacity-50")}>{s.done && <Check className="h-4 w-4" strokeWidth={3} />}</button>
             <span className={clsx("min-w-[8rem] flex-1 break-words text-[15px] font-medium leading-6", s.done ? "text-slate-400 line-through" : "text-slate-800")}>{s.title}</span>
@@ -71,10 +73,12 @@ function Subtasks({ ticketId, items, canEdit, refresh, assignees, userId, onRepl
             </select>
             {canEdit ? <PeoplePicker people={assignees} value={s.assigneeIds} onChange={(ids) => assign.mutate({ id: s.id, assigneeIds: ids })} />
               : <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">{owners.length ? owners.map((o) => o.name).join(", ") : "Anyone"}</span>}
+            </div>
             <button type="button" onClick={() => setOpen(open === s.id ? null : s.id)} aria-expanded={open === s.id} aria-label="Subtask options" title="Options"
               className="-mr-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"><ChevronDown className={clsx("h-5 w-5 transition-transform duration-200", open === s.id && "rotate-180")} /></button>
+            </div>
             {open === s.id && (
-              <div className="anim-fade flex w-full flex-wrap gap-2 border-t border-slate-100 pl-9 pt-2.5">
+              <div className="anim-fade mt-2.5 flex w-full flex-wrap gap-2 border-t border-slate-100 pl-9 pt-2.5">
                 {canEdit && !s.done && s.assigneeIds.length > 0 && (
                   <button type="button" disabled={!!s.remindedAt || remind.isPending} onClick={() => remind.mutate(s.id)} title={s.remindedAt ? "Reminder already sent" : "Email the assignees a reminder (once)"}
                     className={clsx(opt, s.remindedAt ? "cursor-not-allowed text-amber-600" : "text-slate-600 hover:bg-amber-50 hover:text-amber-600")}><Bell className="h-4 w-4" fill={s.remindedAt ? "currentColor" : "none"} />{s.remindedAt ? "Reminder sent" : "Send reminder"}</button>
