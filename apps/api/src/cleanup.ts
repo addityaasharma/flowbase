@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { prisma } from "./db";
-import { NAME, UPLOAD_DIR } from "./uploads";
+import { NAME, UPLOAD_DIR, storage } from "./uploads";
 
 const GRACE_MS = 24 * 3600_000; // a fresh upload may belong to a draft nobody has saved yet
 
@@ -12,7 +12,7 @@ async function isReferenced(name: string) {
 }
 
 async function remove(name: string) {
-  await fs.promises.unlink(path.join(UPLOAD_DIR, name)).catch(() => {});
+  await storage.del(name); // disk and/or R2
   await prisma.upload.deleteMany({ where: { name } });
 }
 

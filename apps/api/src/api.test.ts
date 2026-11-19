@@ -3,6 +3,8 @@ import request from "supertest";
 import { app } from "./app";
 import { prisma } from "./db";
 import { hashToken } from "./tokens";
+import { diskStorage, layered, r2Storage, setStorage, storage as realStorage } from "./uploads";
+import { Readable } from "node:stream";
 
 /**
  * Integration tests against a real database. They create their own users/projects (unique per run) and delete them afterwards.
@@ -286,6 +288,39 @@ describe("image uploads", () => {
     const got = await api().get(ok.body.url.replace("/api", "/api"));
     expect(got.status).toBe(200); expect(got.headers["x-content-type-options"]).toBe("nosniff"); expect(got.headers["content-type"]).toBe("image/png");
     await prisma.upload.deleteMany({ where: { name: ok.body.url.split("/").pop() } });
+  });
+  it("with R2: new images go to the bucket (not the disk), are served through the API, and old disk-only images still work", async () => {
+    // a tiny in-memory stand-in for the S3 client: understands put / get / delete by the command's input
+    const bucket = new Map<string, { body: Buffer; type?: string }>();
+    const fake = { async send(cmd: any) {
+      const i = cmd.input, kind = cmd.constructor.name;
+      if (kind === "PutObjectCommand") { bucket.set(i.Key, { body: i.Body, type: i.ContentType }); return {}; }
+      if (kind === "DeleteObjectCommand") { bucket.delete(i.Key); return {}; }
+      const o = bucket.get(i.Key); if (!o) throw Object.assign(new Error("nope"), { name: "NoSuchKey" });
+      return { Body: Readable.from(o.body), ContentLength: o.body.length };
+    } };
+    const withR2 = layered(r2Storage(fake, "test-bucket"));
+    setStorage(withR2);
+    try {
+      const up = await api().post("/api/uploads").set(auth(bob.token)).set("Content-Type", "image/png").send(png);
+      expect(up.status).toBe(201);
+      const name = up.body.url.split("/").pop() as string;
+      expect(bucket.get(name)?.type).toBe("image/png");           // stored in the bucket...
+      expect(await diskStorage.get(name)).toBeNull();               // ...and not on this server's disk
+      const got = await api().get(up.body.url).buffer(true).parse((r, cb) => { const c: Buffer[] = []; r.on("data", (d) => c.push(d)); r.on("end", () => cb(null, Buffer.concat(c))); });
+      expect(got.status).toBe(200); expect(got.headers["content-type"]).toBe("image/png"); expect(got.headers["x-content-type-options"]).toBe("nosniff");
+      expect((got.body as Buffer).equals(png)).toBe(true);
+      // an image that exists only on disk (uploaded before the move) is still served
+      const old = "0123456789abcdef0123456789abcdef.png";
+      await diskStorage.put(old, png, "image/png");
+      expect((await api().get(`/api/uploads/${old}`)).status).toBe(200);
+      await diskStorage.del(old);
+      // deleting removes it from the bucket too
+      await withR2.del(name);
+      expect(bucket.has(name)).toBe(false);
+      expect((await api().get(up.body.url)).status).toBe(404);
+      await prisma.upload.deleteMany({ where: { name } });
+    } finally { setStorage(realStorage); }
   });
   it("never serves anything outside the uploads folder", async () => {
     for (const p of ["/api/uploads/..%2f..%2fpackage.json", "/api/uploads/00000000000000000000000000000000.png", "/api/uploads/x.png"]) expect((await api().get(p)).status).toBe(404);
