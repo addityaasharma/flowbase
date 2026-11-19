@@ -437,6 +437,7 @@ router.get("/tickets", wrap(async (req, res) => {
 
 router.post("/tickets", rateLimit("ticket", 300, 60 * 60_000), wrap(async (req, res) => {
   const d = createTicketSchema.parse(req.body);
+  if (d.dueDate && d.dueDate.slice(0, 10) < new Date(Date.now() - 36 * 3600_000).toISOString().slice(0, 10)) return res.status(400).json({ error: "The due date can't be in the past" }); // (a day of slack for time zones)
   if (!(await projectAccess(req, res, d.projectId))) return;
   if (!(await assigneesOk(res, d.projectId, d.assigneeIds))) return;
   const last = await prisma.ticket.findFirst({ where: { projectId: d.projectId, status: d.status }, orderBy: { position: "desc" }, select: { position: true } });
