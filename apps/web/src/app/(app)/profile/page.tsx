@@ -3,10 +3,11 @@ import { useRef, useState } from "react";
 import { clearDrafts, usePersisted } from "@/lib/persist";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Bot, Camera, Check, ChevronDown, FolderPlus, LogOut, Trash2 } from "lucide-react";
+import { ArrowRight, Bot, Camera, Check, BookOpen, ChevronDown, FolderPlus, LogOut, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { DeleteProjectModal } from "@/components/DeleteProjectModal";
 import { DeveloperAccess } from "@/components/DeveloperAccess";
+import { ClaudeGuide } from "@/components/ClaudeGuide";
 import { AppSettings } from "@/components/AppSettings";
 import { useTheme } from "@/lib/theme";
 import type { Project } from "@/lib/types";
@@ -64,6 +65,7 @@ export default function Profile() {
   const toDelete = projects.find((p) => p.id === toDeleteId) ?? null;
   const setToDelete = (p: Project | null) => { if (!p) clearDrafts("deleteProject:"); setToDeleteId(p?.id ?? null); };
   const [devOpen, setDevOpen] = usePersisted("profile:dev", false, true);
+  const [guideOpen, setGuideOpen] = usePersisted("profile:guide", false, true);
   const theme = useTheme();
   const fileRef = useRef<HTMLInputElement>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -142,6 +144,11 @@ export default function Profile() {
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-600"><Bot className="h-5 w-5" /></span>
             <span className="min-w-0 flex-1"><span className="block font-semibold">Developer access</span><span className="block text-xs text-slate-500">Available on desktop only</span></span>
           </div>
+        <button onClick={() => setGuideOpen(true)} className="mt-3 flex w-full items-center gap-3 rounded-[28px] bg-white p-4 text-left shadow-card transition hover:shadow-lift sm:p-5">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600"><BookOpen className="h-5 w-5" /></span>
+          <span className="min-w-0 flex-1"><span className="block font-semibold">Claude guide</span><span className="block text-xs text-slate-500">How to connect and use Claude with Flowbase</span></span>
+          <ArrowRight className="h-4 w-4 text-slate-400" />
+        </button>
         </div>
 
       </div>
@@ -177,6 +184,7 @@ export default function Profile() {
           </div>
         </div>
       </section>
+      {guideOpen && <ClaudeGuide onClose={() => setGuideOpen(false)} />}
       {devOpen && <DeveloperAccess onClose={() => { clearDrafts("dev:"); setDevOpen(false); }} />}
       {toDelete && <DeleteProjectModal project={toDelete} onClose={() => setToDelete(null)} />}
     </div>
