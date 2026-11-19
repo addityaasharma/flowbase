@@ -37,6 +37,7 @@ model User {
   email        String          @unique
   name         String
   title        String?
+  avatar       String?                         // name of an uploaded image (<32 hex>.<ext>)
   passwordHash String
   role         Role            @default(MEMBER)
   active       Boolean         @default(true)

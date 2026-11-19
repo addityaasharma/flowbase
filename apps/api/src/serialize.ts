@@ -1,6 +1,6 @@
 import type { Role } from "@bitcode/shared";
 
-export const userSelect = { id: true, name: true, email: true, title: true, active: true } as const;
+export const userSelect = { id: true, name: true, email: true, title: true, active: true, avatar: true } as const;
 
 export const ticketInclude = {
   assignees: { select: { userId: true, user: { select: userSelect } }, orderBy: { assignedAt: "asc" as const } },

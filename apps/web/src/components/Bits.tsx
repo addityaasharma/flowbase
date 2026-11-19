@@ -5,21 +5,22 @@ import type { Priority, Status, TicketType } from "@bitcode/shared";
 import { PRIORITY_LABEL, STATUS_LABEL } from "@bitcode/shared";
 import { Bug, CheckSquare, Sparkles, Wrench } from "lucide-react";
 import { PRIORITY_PILL, STATUS_DOT, STATUS_PILL } from "@/lib/ui";
+import { API_BASE } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import type { User } from "@/lib/types";
 
-export function Avatar({ user, size = 28 }: { user: Pick<User, "id" | "name"> | null; size?: number }) {
+export function Avatar({ user, size = 28 }: { user: Pick<User, "id" | "name" | "avatar"> | null; size?: number }) {
   const { toneOf } = useWorkspace();
   if (!user) return <span style={{ width: size, height: size }} className="inline-flex items-center justify-center rounded-full border border-dashed border-slate-300 text-xs text-slate-400">?</span>;
   return (
     <span style={{ width: size, height: size, fontSize: size * 0.42 }} title={user.name}
       className={clsx("inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white ring-2 ring-white shadow-sm", toneOf(user.id).avatar)}>
-      {user.name[0]?.toUpperCase()}
+      {user.avatar ? <img src={`${API_BASE}/uploads/${user.avatar}`} alt="" className="h-full w-full rounded-full object-cover" /> : user.name[0]?.toUpperCase()}
     </span>
   );
 }
 /** Overlapping avatars (max 3) plus a "+N" bubble. */
-export function AssigneeStack({ users, size = 28 }: { users: Pick<User, "id" | "name">[]; size?: number }) {
+export function AssigneeStack({ users, size = 28 }: { users: Pick<User, "id" | "name" | "avatar">[]; size?: number }) {
   if (!users.length) return <Avatar user={null} size={size} />;
   const shown = users.slice(0, 3), extra = users.length - shown.length;
   return (

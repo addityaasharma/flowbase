@@ -9,6 +9,7 @@ type Ctx = {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>; logout: () => void;
   updateName: (name: string) => Promise<void>;
+  updateAvatar: (avatar: string | null) => Promise<void>;
   setSession: (token: string, user: User) => void; // used after a password reset
   markVerified: () => void;
   markTourSeen: () => void; // the welcome tour was finished or skipped: remember it on the server, once
@@ -47,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const markVerified = () => setUser((u) => (u ? { ...u, emailVerified: true } : u));
   const markTourSeen = () => { setUser((u) => (u ? { ...u, tourSeen: true } : u)); api("/auth/tour-seen", { method: "POST" }).catch(() => {}); };
   const updateName = async (name: string) => setUser(await api<User>("/auth/me", { method: "PATCH", json: { name } }));
+  const updateAvatar = async (avatar: string | null) => setUser(await api<User>("/auth/me", { method: "PATCH", json: { avatar } }));
   const logout = () => { void forgetDevice(tokenStore.get()); tokenStore.clear(); setUser(null); pending.current = null; };
 
   const requireAuth = useCallback((then?: () => void) => {
@@ -56,5 +58,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false;
   }, [user]);
 
-  return <AuthCtx.Provider value={{ user, loading, login, register, logout, updateName, setSession, markVerified, markTourSeen, requireAuth, signInOpen, setSignInOpen }}>{children}</AuthCtx.Provider>;
+  return <AuthCtx.Provider value={{ user, loading, login, register, logout, updateName, updateAvatar, setSession, markVerified, markTourSeen, requireAuth, signInOpen, setSignInOpen }}>{children}</AuthCtx.Provider>;
 }

@@ -8,7 +8,8 @@ const GRACE_MS = 24 * 3600_000; // a fresh upload may belong to a draft nobody h
 /** True if any ticket description or comment still mentions this image. */
 async function isReferenced(name: string) {
   if (await prisma.ticket.count({ where: { description: { contains: name } } })) return true;
-  return (await prisma.comment.count({ where: { body: { contains: name } } })) > 0;
+  if (await prisma.comment.count({ where: { body: { contains: name } } })) return true;
+  return (await prisma.user.count({ where: { avatar: name } })) > 0;
 }
 
 async function remove(name: string) {

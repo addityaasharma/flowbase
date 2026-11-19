@@ -16,7 +16,7 @@ import { grant, openStream, publish, revoke } from "./events";
 import { notify, ticketAudience } from "./notifications";
 import { currentVia, newToken } from "./tokens"; // (routes.ts already has the same sha256 hashToken helper)
 import express from "express";
-import { MAX_UPLOAD_BYTES, saveUpload, serveUpload } from "./uploads";
+import { MAX_UPLOAD_BYTES, NAME, saveUpload, serveUpload } from "./uploads";
 import { publicKey, pushEnabled, sendPush } from "./push";
 import { STATUSES } from "@bitcode/shared";
 import { flattenMembers, ticketInclude, userSelect, withKey } from "./serialize";
@@ -86,8 +86,8 @@ async function projectAccess(req: Request, res: Response, projectId: string, all
 }
 
 // ================= public: auth + invitation lookup =================
-type UserRow = { id: string; name: string; email: string; title: string | null; active: boolean; emailVerifiedAt: Date | null; tourSeenAt?: Date | null };
-const publicUser = (u: UserRow) => ({ id: u.id, name: u.name, email: u.email, title: u.title, active: u.active, emailVerified: !!u.emailVerifiedAt, tourSeen: u.tourSeenAt === undefined ? true : !!u.tourSeenAt });
+type UserRow = { id: string; name: string; email: string; title: string | null; avatar?: string | null; active: boolean; emailVerifiedAt: Date | null; tourSeenAt?: Date | null };
+const publicUser = (u: UserRow) => ({ id: u.id, name: u.name, email: u.email, title: u.title, avatar: u.avatar ?? null, active: u.active, emailVerified: !!u.emailVerifiedAt, tourSeen: u.tourSeenAt === undefined ? true : !!u.tourSeenAt });
 
 /** Creates a one-time emailed link (only its hash is stored). A new password-reset link replaces earlier ones; confirmation links
  *  do not: if two confirmation emails go out (e.g. "Resend"), whichever one is opened first must still work. */
@@ -281,8 +281,9 @@ router.get("/events", wrap((req, res) => openStream(req, res)));
 router.post("/uploads", rateLimit("upload", 60, 60 * 60_000), express.raw({ type: () => true, limit: MAX_UPLOAD_BYTES }), wrap(saveUpload));
 
 router.patch("/auth/me", wrap(async (req, res) => {
-  const { name } = z.object({ name: z.string().trim().min(1).max(80) }).parse(req.body);
-  res.json(await prisma.user.update({ where: { id: req.user!.id }, data: { name }, select: userSelect }));
+  const { name, avatar } = z.object({ name: z.string().trim().min(1).max(80).optional(), avatar: z.string().regex(NAME).nullable().optional() }).parse(req.body);
+  if (avatar && !(await prisma.upload.findFirst({ where: { name: avatar, userId: req.user!.id } }))) return res.status(400).json({ error: "Upload the image first" });
+  res.json(await prisma.user.update({ where: { id: req.user!.id }, data: { ...(name !== undefined && { name }), ...(avatar !== undefined && { avatar }) }, select: userSelect }));
 }));
 
 router.post("/auth/password", rateLimit("password", 10, 15 * 60_000), wrap(async (req, res) => {

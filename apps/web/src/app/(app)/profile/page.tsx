@@ -1,16 +1,16 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { clearDrafts, usePersisted } from "@/lib/persist";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Bot, Check, ChevronDown, FolderPlus, LogOut, Trash2 } from "lucide-react";
+import { ArrowRight, Bot, Camera, Check, ChevronDown, FolderPlus, LogOut, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { DeleteProjectModal } from "@/components/DeleteProjectModal";
 import { DeveloperAccess } from "@/components/DeveloperAccess";
 import { AppSettings } from "@/components/AppSettings";
 import { useTheme } from "@/lib/theme";
 import type { Project } from "@/lib/types";
-import { api, tokenStore } from "@/lib/api";
+import { api, tokenStore, uploadImage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useWorkspace } from "@/lib/workspace";
 import { Avatar, btnGhost, btnPrimary, inputCls } from "@/components/Bits";
@@ -53,7 +53,7 @@ function ChangePassword() {
 }
 
 export default function Profile() {
-  const { user, updateName, logout } = useAuth();
+  const { user, updateName, updateAvatar, logout } = useAuth();
   const { projects, project, setProjectId, setNewProject } = useWorkspace();
   const qc = useQueryClient();
   const router = useRouter();
@@ -65,6 +65,19 @@ export default function Profile() {
   const setToDelete = (p: Project | null) => { if (!p) clearDrafts("deleteProject:"); setToDeleteId(p?.id ?? null); };
   const [devOpen, setDevOpen] = usePersisted("profile:dev", false, true);
   const theme = useTheme();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const changePhoto = async (file: File | undefined) => {
+    if (!file) return;
+    setPhotoBusy(true); setError("");
+    try {
+      const url = await uploadImage(file);
+      await updateAvatar(url.split("/").pop()!);
+      qc.invalidateQueries({ queryKey: ["projects"] }); qc.invalidateQueries({ queryKey: ["tickets"] });
+    } catch (e) { setError((e as Error).message); }
+    setPhotoBusy(false);
+    if (fileRef.current) fileRef.current.value = "";
+  };
   if (!user) return null;
   const dirty = name.trim() !== user.name && name.trim().length > 0;
 
@@ -84,7 +97,11 @@ export default function Profile() {
       <div className="min-w-0 space-y-5 max-lg:contents lg:overflow-y-auto lg:pr-1">
         <section className="min-w-0 rounded-[28px] bg-white p-4 shadow-card max-lg:order-1 sm:p-5">
           <div className="flex items-center gap-3.5">
-            <Avatar user={user} size={56} />
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={photoBusy} title="Change profile photo" aria-label="Change profile photo" className="group relative shrink-0 rounded-full">
+              <Avatar user={user} size={56} />
+              <span className={clsx("absolute inset-0 flex items-center justify-center rounded-full bg-slate-900/50 text-white transition-opacity", photoBusy ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100")}>{photoBusy ? <span className="text-xs">…</span> : <Camera className="h-5 w-5" />}</span>
+            </button>
+            <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp" className="hidden" onChange={(e) => changePhoto(e.target.files?.[0])} />
             <div className="min-w-0 flex-1">
               <h2 className="text-xl font-semibold tracking-tight">Your profile</h2>
               <p className="truncate text-sm text-slate-500" title={user.email}>{user.email}</p>
@@ -100,6 +117,7 @@ export default function Profile() {
               </button>
             </div>
           </form>
+          {user.avatar && <button type="button" className="mt-2 text-xs text-slate-500 hover:text-rose-600" onClick={() => updateAvatar(null).then(() => { qc.invalidateQueries({ queryKey: ["projects"] }); qc.invalidateQueries({ queryKey: ["tickets"] }); }).catch((e) => setError(e.message))}>Remove photo</button>}
           {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
         </section>
 
