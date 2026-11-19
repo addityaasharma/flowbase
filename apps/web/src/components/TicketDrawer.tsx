@@ -237,7 +237,7 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
       <aside className="anim-slide flex h-full w-full flex-col overflow-hidden bg-white shadow-lift sm:w-[96vw] sm:max-w-[2000px] sm:rounded-l-[32px]" onMouseDown={(e) => e.stopPropagation()}>
         {!t ? <p className="p-8 text-slate-500">Loading…</p> : (
           <>
-            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-8 py-4">
+            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-8 sm:py-4">
               <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold text-slate-500">
                 <TypeIcon t={t.type} />{t.key}<StatusPill s={t.status} /><PriorityPill p={t.priority} />
                 <span className="ml-1 hidden min-w-0 items-center gap-1.5 text-xs font-normal text-slate-400 md:flex">
@@ -257,12 +257,12 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
             <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_340px] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
               <>
                 {/* ---------- main column ---------- */}
-                <div className="min-w-0 space-y-7 p-8 lg:min-h-0 lg:overflow-y-auto">
+                <div className="min-w-0 space-y-5 p-4 sm:space-y-7 sm:p-8 lg:min-h-0 lg:overflow-y-auto">
                   {user && !canEdit && (
-                    <p className="flex items-start gap-2 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800"><Lock className="mt-0.5 h-4 w-4 shrink-0" />You can’t edit this ticket because it isn’t assigned to you. Only its assignees or the person who created it can change it. You can still comment below.</p>
+                    <p className="flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800"><Lock className="h-3.5 w-3.5 shrink-0" />View only: this ticket isn’t assigned to you. You can still comment.</p>
                   )}
                   <fieldset disabled={!canEdit} className="m-0 min-w-0 border-0 p-0">
-                    <input key={t.updatedAt + "title"} className="w-full rounded-xl border border-transparent px-2 py-1 text-2xl font-semibold tracking-tight hover:border-slate-200 focus:border-indigo-500 focus:outline-none disabled:hover:border-transparent"
+                    <input key={t.updatedAt + "title"} className="w-full rounded-xl border border-transparent px-0 py-1 text-xl font-semibold sm:px-2 sm:text-2xl tracking-tight hover:border-slate-200 focus:border-indigo-500 focus:outline-none disabled:hover:border-transparent"
                       defaultValue={t.title} onBlur={(e) => e.target.value.trim() && e.target.value !== t.title && patch.mutate({ title: e.target.value.trim() })} />
                   </fieldset>
 
@@ -290,7 +290,7 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                 </div>
 
                 {/* ---------- comments column ---------- */}
-                <div className="min-w-0 space-y-7 border-slate-100 p-8 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:px-6">
+                <div className="min-w-0 space-y-5 border-t border-slate-100 p-4 sm:space-y-7 sm:p-8 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-t-0 lg:px-6">
                   <section>
                     <h3 className="mb-3 text-sm font-semibold">Comments <span className="font-normal text-slate-400">({t.comments.length})</span></h3>
                     <div className="space-y-2.5">
@@ -316,7 +316,7 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
                 </div>
 
                 {/* ---------- side column ---------- */}
-                <div className="min-w-0 space-y-5 p-8 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-slate-100 lg:pl-6">
+                <div className="min-w-0 space-y-5 border-t border-slate-100 p-4 sm:p-8 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-t-0 lg:pl-6">
                   <div className="rounded-3xl bg-slate-50 p-5">
                     {frozen && <p className="mb-3 flex items-start gap-2 rounded-2xl bg-rose-50 px-3.5 py-2.5 text-xs text-rose-700"><Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />Overdue and blocked. Only {t.reporter.name}, who created this task, can unblock it or change its due date.</p>}
                     <fieldset disabled={!canEdit} className="m-0 min-w-0 space-y-4 border-0 p-0">
