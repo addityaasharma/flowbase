@@ -43,6 +43,7 @@ function PeoplePicker({ people, value, onChange }: { people: { id: string; name:
 function Subtasks({ ticketId, items, canEdit, refresh, assignees, userId, onReply }: { ticketId: string; items: SubtaskRow[]; canEdit: boolean; refresh: () => void; assignees: { id: string; name: string }[]; userId?: string; onReply: (s: SubtaskRow) => void }) {
   const [text, setText] = useState("");
   const [who, setWho] = useState<string[]>([]);
+  const [open, setOpen] = useState<string | null>(null); // the subtask whose options are expanded
   const add = useMutation({ mutationFn: (title: string) => api(`/tickets/${ticketId}/subtasks`, { method: "POST", json: { title, assigneeIds: who } }), onSuccess: () => { setText(""); setWho([]); refresh(); } });
   const assign = useMutation({ mutationFn: (v: { id: string; assigneeIds: string[] }) => api(`/subtasks/${v.id}`, { method: "PATCH", json: { assigneeIds: v.assigneeIds } }), onSuccess: refresh });
   const toggle = useMutation({ mutationFn: (v: { id: string; status: SubtaskRow["status"] }) => api(`/subtasks/${v.id}`, { method: "PATCH", json: { status: v.status } }), onSuccess: refresh });
@@ -58,7 +59,7 @@ function Subtasks({ ticketId, items, canEdit, refresh, assignees, userId, onRepl
         {items.map((s) => {
           const mine = s.assigneeIds.length ? !!userId && s.assigneeIds.includes(userId) : canEdit; // only the assigned person ticks it
           const owners = assignees.filter((a) => s.assigneeIds.includes(a.id));
-          const icon = "flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-slate-100";
+          const opt = "flex items-center gap-1.5 rounded-full bg-slate-50 px-3.5 py-1.5 text-sm font-medium transition";
           return (
           <li key={s.id} className={clsx("flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl px-3.5 py-2.5 ring-1 transition", s.done ? "bg-slate-50/60 ring-slate-100" : "bg-white ring-slate-200 hover:ring-indigo-200")}>
             <button type="button" disabled={!mine} title={mine ? undefined : owners.length ? `Only ${owners.map((o) => o.name).join(", ")} can check this` : undefined} aria-label={s.done ? "Mark as not done" : "Mark as done"} onClick={() => toggle.mutate({ id: s.id, status: s.done ? "TODO" : "DONE" })}
@@ -70,14 +71,19 @@ function Subtasks({ ticketId, items, canEdit, refresh, assignees, userId, onRepl
             </select>
             {canEdit ? <PeoplePicker people={assignees} value={s.assigneeIds} onChange={(ids) => assign.mutate({ id: s.id, assigneeIds: ids })} />
               : <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">{owners.length ? owners.map((o) => o.name).join(", ") : "Anyone"}</span>}
-            <div className="-mr-1.5 flex shrink-0 items-center">
-              {canEdit && !s.done && s.assigneeIds.length > 0 && (
-                <button type="button" disabled={!!s.remindedAt || remind.isPending} onClick={() => remind.mutate(s.id)} aria-label="Send reminder email" title={s.remindedAt ? "Reminder already sent" : "Email the assignees a reminder (once)"}
-                  className={clsx(icon, s.remindedAt ? "cursor-not-allowed text-amber-500" : "text-slate-400 hover:text-amber-500")}><Bell className="h-[18px] w-[18px]" fill={s.remindedAt ? "currentColor" : "none"} /></button>
-              )}
-              {userId && <button type="button" aria-label="Reply to this subtask" title="Reply in comments" onClick={() => onReply(s)} className={clsx(icon, "text-slate-400 hover:text-indigo-600")}><CornerDownRight className="h-[18px] w-[18px]" /></button>}
-              {canEdit && <button type="button" aria-label="Remove subtask" title="Remove" onClick={() => remove.mutate(s.id)} className={clsx(icon, "text-slate-400 hover:text-rose-600")}><X className="h-[18px] w-[18px]" /></button>}
-            </div>
+            <button type="button" onClick={() => setOpen(open === s.id ? null : s.id)} aria-expanded={open === s.id} aria-label="Subtask options" title="Options"
+              className="-mr-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"><ChevronDown className={clsx("h-5 w-5 transition-transform duration-200", open === s.id && "rotate-180")} /></button>
+            {open === s.id && (
+              <div className="anim-fade flex w-full flex-wrap gap-2 border-t border-slate-100 pl-9 pt-2.5">
+                {canEdit && !s.done && s.assigneeIds.length > 0 && (
+                  <button type="button" disabled={!!s.remindedAt || remind.isPending} onClick={() => remind.mutate(s.id)} title={s.remindedAt ? "Reminder already sent" : "Email the assignees a reminder (once)"}
+                    className={clsx(opt, s.remindedAt ? "cursor-not-allowed text-amber-600" : "text-slate-600 hover:bg-amber-50 hover:text-amber-600")}><Bell className="h-4 w-4" fill={s.remindedAt ? "currentColor" : "none"} />{s.remindedAt ? "Reminder sent" : "Send reminder"}</button>
+                )}
+                {userId && <button type="button" onClick={() => { onReply(s); setOpen(null); }} className={clsx(opt, "text-slate-600 hover:bg-indigo-50 hover:text-indigo-600")}><CornerDownRight className="h-4 w-4" />Reply in comments</button>}
+                {canEdit && <button type="button" onClick={() => { remove.mutate(s.id); setOpen(null); }} className={clsx(opt, "text-slate-600 hover:bg-rose-50 hover:text-rose-600")}><X className="h-4 w-4" />Remove</button>}
+                {!canEdit && !userId && <span className="text-xs text-slate-400">Sign in to reply</span>}
+              </div>
+            )}
           </li>
         );})}
       </ul>
