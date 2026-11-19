@@ -123,6 +123,7 @@ describe("who can change a ticket", () => {
     expect((await api().post(`/api/tickets/${t.id}/move`).set(auth(bob.token)).send({ status: "TODO" })).status).toBe(403);
     expect((await api().patch(`/api/tickets/${t.id}`).set(auth(bob.token)).send({ priority: "HIGH" })).status).toBe(200); // other edits are fine
     expect((await api().post(`/api/tickets/${t.id}/move`).set(auth(alice.token)).send({ status: "IN_PROGRESS" })).status).toBe(200);
+    await api().post(`/api/tickets/${t.id}/move`).set(auth(alice.token)).send({ status: "DONE" }); // keep it out of later "open tasks" assertions
   });
   it("subtask assignees: only they can tick it, the bell works once", async () => {
     const mk = (b: object) => api().post(`/api/tickets/${bobs.id}/subtasks`).set(auth(alice.token)).send(b);
