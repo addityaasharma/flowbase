@@ -3,6 +3,7 @@ import request from "supertest";
 import { app } from "./app";
 import { prisma } from "./db";
 import { hashToken } from "./tokens";
+import { setPushSender } from "./push";
 import { diskStorage, layered, r2Storage, setStorage, storage as realStorage } from "./uploads";
 import { Readable } from "node:stream";
 
@@ -142,6 +143,39 @@ describe("who can change a ticket", () => {
     const r = await api().post("/api/auth/resend-verification").set(auth(hal.token));
     expect(r.status).toBe(200); expect(r.body.throttled).toBe(true); // sign-up just sent one
     expect(await prisma.authToken.count({ where: { userId: hal.id, kind: "verify" } })).toBe(before);
+  });
+  it("push notifications: a device subscribes, gets notified about others' actions, and is forgotten when it is gone", async () => {
+    const calls: { endpoint: string; url: string }[] = [];
+    let gone = false;
+    setPushSender(async (sub, payload) => { if (gone) throw Object.assign(new Error("gone"), { statusCode: 410 }); calls.push({ endpoint: sub.endpoint, url: payload.url }); });
+    const endpoint = `https://push.test/${tag}/bob-phone`;
+    try {
+      expect((await api().post("/api/push/subscribe").send({ endpoint, keys: { p256dh: "x".repeat(20), auth: "y".repeat(12) } })).status).toBe(401);
+      expect((await api().post("/api/push/subscribe").set(auth(bob.token)).send({ endpoint: "http://insecure.test/x", keys: { p256dh: "x".repeat(20), auth: "y".repeat(12) } })).status).toBe(400);
+      expect((await api().post("/api/push/subscribe").set(auth(bob.token)).send({ endpoint, keys: { p256dh: "x".repeat(20), auth: "y".repeat(12) } })).status).toBe(201);
+      const wait = async (n: number) => { for (let i = 0; i < 40 && calls.length < n; i++) await new Promise((r) => setTimeout(r, 50)); };
+      await api().post(`/api/tickets/${bobs.id}/comments`).set(auth(alice.token)).send({ body: "ping bob" }); // someone else acts on bob's task
+      await wait(1);
+      expect(calls.some((c) => c.endpoint === endpoint && c.url === `/?ticket=${bobs.id}`)).toBe(true);
+      const n = calls.length;
+      await api().post(`/api/tickets/${bobs.id}/comments`).set(auth(bob.token)).send({ body: "my own comment" }); // his own action never notifies him
+      await new Promise((r) => setTimeout(r, 300));
+      expect(calls.length).toBe(n);
+      gone = true; // the device was uninstalled: the push service answers 410 and we forget it
+      await api().post(`/api/tickets/${bobs.id}/comments`).set(auth(alice.token)).send({ body: "again" });
+      for (let i = 0; i < 40 && (await prisma.pushSubscription.count({ where: { endpoint } })); i++) await new Promise((r) => setTimeout(r, 50));
+      expect(await prisma.pushSubscription.count({ where: { endpoint } })).toBe(0);
+      // moving a device to another account, and signing out of it
+      const ep2 = `https://push.test/${tag}/shared`;
+      const keys = { p256dh: "x".repeat(20), auth: "y".repeat(12) };
+      await api().post("/api/push/subscribe").set(auth(bob.token)).send({ endpoint: ep2, keys });
+      await api().post("/api/push/subscribe").set(auth(cara.token)).send({ endpoint: ep2, keys });
+      expect((await prisma.pushSubscription.findUnique({ where: { endpoint: ep2 } }))?.userId).toBe(cara.id);
+      await api().post("/api/push/unsubscribe").set(auth(bob.token)).send({ endpoint: ep2 }); // someone else's device: untouched
+      expect(await prisma.pushSubscription.count({ where: { endpoint: ep2 } })).toBe(1);
+      await api().post("/api/push/unsubscribe").set(auth(cara.token)).send({ endpoint: ep2 });
+      expect(await prisma.pushSubscription.count({ where: { endpoint: ep2 } })).toBe(0);
+    } finally { setPushSender(null); }
   });
   it("the welcome tour is offered to new sign-ups once", async () => {
     const eve = await signUp("Eve");

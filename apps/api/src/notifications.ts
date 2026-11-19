@@ -1,6 +1,7 @@
 import { prisma } from "./db";
 import { sendToUser } from "./events";
 import { currentVia } from "./tokens";
+import { sendPush } from "./push";
 
 /**
  * Saves an inbox entry for each recipient (so people who are offline still see it) and pushes it live to anyone online.
@@ -20,6 +21,8 @@ export async function notify(o: {
     })),
   });
   for (const r of rows) sendToUser(r.userId, "notification", r);
+  // and to their phones / computers, even if Flowbase is closed (the same wording as the in-app entry)
+  void sendPush(ids, { title: "Flowbase", body: o.actor ? `${o.actor.name} ${text}` : text, url: o.ticketId ? `/?ticket=${o.ticketId}` : "/", tag: rows[0]?.id }).catch(console.error);
 }
 
 /** The people a ticket concerns: its assignees and its creator. */

@@ -17,6 +17,7 @@ import { notify, ticketAudience } from "./notifications";
 import { currentVia, newToken } from "./tokens"; // (routes.ts already has the same sha256 hashToken helper)
 import express from "express";
 import { MAX_UPLOAD_BYTES, saveUpload, serveUpload } from "./uploads";
+import { publicKey, pushEnabled, sendPush } from "./push";
 import { STATUSES } from "@bitcode/shared";
 import { flattenMembers, ticketInclude, userSelect, withKey } from "./serialize";
 
@@ -222,6 +223,31 @@ router.use(requireAuth);
 
 router.get("/auth/me", wrap(async (req, res) => {
   res.json(publicUser((await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id } }))));
+}));
+
+// ---------- push notifications (this browser / installed app) ----------
+router.get("/push/key", (_req, res) => res.json({ enabled: pushEnabled(), key: publicKey() }));
+const subscribeSchema = z.object({ endpoint: z.string().url().max(1000).refine((u) => u.startsWith("https://"), "https only"), keys: z.object({ p256dh: z.string().min(10).max(200), auth: z.string().min(10).max(100) }) });
+router.post("/push/subscribe", rateLimit("pushsub", 60, 60 * 60_000), wrap(async (req, res) => {
+  const d = subscribeSchema.parse(req.body);
+  const userId = req.user!.id;
+  // the device now belongs to whoever is signed in on it (so the previous person on a shared browser stops getting it)
+  await prisma.pushSubscription.upsert({
+    where: { endpoint: d.endpoint }, update: { userId, p256dh: d.keys.p256dh, auth: d.keys.auth, userAgent: (req.get("user-agent") ?? "").slice(0, 200) },
+    create: { userId, endpoint: d.endpoint, p256dh: d.keys.p256dh, auth: d.keys.auth, userAgent: (req.get("user-agent") ?? "").slice(0, 200) },
+  });
+  const mine = await prisma.pushSubscription.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, select: { id: true } });
+  if (mine.length > 10) await prisma.pushSubscription.deleteMany({ where: { id: { in: mine.slice(10).map((m) => m.id) } } }); // keep the 10 newest devices
+  res.status(201).json({ ok: true });
+}));
+router.post("/push/unsubscribe", wrap(async (req, res) => {
+  const endpoint = z.string().max(1000).parse(req.body?.endpoint);
+  await prisma.pushSubscription.deleteMany({ where: { endpoint, userId: req.user!.id } });
+  res.json({ ok: true });
+}));
+router.post("/push/test", rateLimit("pushtest", 10, 60 * 60_000), wrap(async (req, res) => {
+  const sent = await sendPush([req.user!.id], { title: "Flowbase", body: "Notifications are working on this device.", url: "/", tag: "test" });
+  res.json({ ok: true, sent });
 }));
 
 // the welcome tour was finished or skipped: remember it once, for good (all devices)

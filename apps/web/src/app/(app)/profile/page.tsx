@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Bot, Check, FolderPlus, LogOut, Trash2 } from "lucide-react";
 import { DeleteProjectModal } from "@/components/DeleteProjectModal";
 import { DeveloperAccess } from "@/components/DeveloperAccess";
+import { AppSettings } from "@/components/AppSettings";
 import { useTheme } from "@/lib/theme";
 import type { Project } from "@/lib/types";
 import { api, tokenStore } from "@/lib/api";
@@ -94,7 +95,8 @@ export default function Profile() {
           {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
         </section>
 
-        <div className="min-w-0 max-lg:order-4"><ChangePassword /></div>
+        <div className="min-w-0 max-lg:order-4"><AppSettings /></div>
+        <div className="min-w-0 max-lg:order-5"><ChangePassword /></div>
 
         <section className="flex flex-wrap items-center justify-between gap-3 rounded-[28px] bg-white p-4 shadow-card max-lg:order-3 sm:p-5">
           <div><h3 className="font-semibold">Appearance</h3><p className="text-xs text-slate-500">Auto follows your device</p></div>
@@ -103,7 +105,7 @@ export default function Profile() {
           </div>
         </section>
 
-        <div className="max-lg:order-5">
+        <div className="max-lg:order-6">
         <button onClick={() => setDevOpen(true)} className="hidden w-full items-center gap-3 rounded-[28px] bg-white p-5 text-left shadow-card transition hover:shadow-lift sm:flex">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-600"><Bot className="h-5 w-5" /></span>
           <span className="min-w-0 flex-1"><span className="block font-semibold">Developer access</span><span className="block text-xs text-slate-500">Let Claude Code work on your assigned tasks</span></span>

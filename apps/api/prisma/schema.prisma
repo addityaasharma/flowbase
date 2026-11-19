@@ -43,6 +43,7 @@ model User {
   tokenVersion  Int             @default(0)   // bumped on password change/reset: signs out every other session
   emailVerifiedAt DateTime?
   tourSeenAt   DateTime?                       // the welcome tour was shown (finished or skipped): never offered again
+  pushSubscriptions PushSubscription[]
   authTokens   AuthToken[]
   apiTokens    ApiToken[]
   ticketRepos  TicketRepo[]
@@ -277,4 +278,18 @@ enum SubtaskStatus {
   IN_PROGRESS
   REVIEW
   DONE
+}
+
+/// A browser / installed app that asked to get push notifications (even when Flowbase is closed). One row per device.
+model PushSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
 }

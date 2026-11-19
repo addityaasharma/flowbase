@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, tokenStore } from "./api";
 import type { User } from "./types";
+import { forgetDevice } from "./pwa";
 
 type Ctx = {
   user: User | null; loading: boolean;
@@ -44,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const markVerified = () => setUser((u) => (u ? { ...u, emailVerified: true } : u));
   const markTourSeen = () => { setUser((u) => (u ? { ...u, tourSeen: true } : u)); api("/auth/tour-seen", { method: "POST" }).catch(() => {}); };
   const updateName = async (name: string) => setUser(await api<User>("/auth/me", { method: "PATCH", json: { name } }));
-  const logout = () => { tokenStore.clear(); setUser(null); pending.current = null; };
+  const logout = () => { void forgetDevice(tokenStore.get()); tokenStore.clear(); setUser(null); pending.current = null; };
 
   const requireAuth = useCallback((then?: () => void) => {
     if (user) { then?.(); return true; }

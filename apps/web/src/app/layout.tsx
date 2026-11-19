@@ -6,8 +6,8 @@ import { THEME_BOOT } from "@/lib/theme";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, maximumScale: 1, userScalable: false }; // no pinch / focus zoom
-export const metadata: Metadata = { title: "Flowbase", description: "Plan, track and ship work with your team" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, maximumScale: 1, userScalable: false, themeColor: "#f5f5f7" }; // no pinch / focus zoom
+export const metadata: Metadata = { title: "Flowbase", description: "Plan, track and ship work with your team", applicationName: "Flowbase", appleWebApp: { capable: true, title: "Flowbase", statusBarStyle: "default" } };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
