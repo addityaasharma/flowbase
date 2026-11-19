@@ -2,7 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, tokenStore } from "./api";
 import type { User } from "./types";
-import { forgetDevice } from "./pwa";
+import { forgetDevice, syncPushWithAccount } from "./pwa";
 
 type Ctx = {
   user: User | null; loading: boolean;
@@ -29,6 +29,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!tokenStore.get()) return setLoading(false);
     api<User>("/auth/me").then(setUser).catch(() => tokenStore.clear()).finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { if (user?.id) void syncPushWithAccount(); }, [user?.id]); // notifications on this device follow the signed-in account
 
   const finish = (r: { token: string; user: User }) => {
     tokenStore.set(r.token);

@@ -53,6 +53,14 @@ export async function disablePush() {
   await api("/push/unsubscribe", { method: "POST", json: { endpoint: sub.endpoint } }).catch(() => {});
   await sub.unsubscribe().catch(() => {});
 }
+/** This device belongs to whoever is signed in on it: if notifications were turned on here (possibly as someone else), attach the device to the current account. */
+export async function syncPushWithAccount() {
+  try {
+    if (!pushSupported() || Notification.permission !== "granted") return;
+    const sub = await currentSubscription();
+    if (sub) await api("/push/subscribe", { method: "POST", json: sub.toJSON() });
+  } catch { /* best effort */ }
+}
 /** On sign-out: stop this device getting the previous person's notifications. Takes the token explicitly because it is about to be cleared. */
 export async function forgetDevice(token: string | null) {
   try {

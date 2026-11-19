@@ -619,6 +619,7 @@ router.post("/tickets/:id/subtasks", wrap(async (req, res) => {
   const last = await prisma.subtask.findFirst({ where: { ticketId: t.id }, orderBy: { position: "desc" }, select: { position: true } });
   const s = await prisma.subtask.create({ data: { ticketId: t.id, title, assigneeIds, position: (last?.position ?? 0) + 1000 } });
   touched(t, req, `added subtask “${title}”`);
+  if (assigneeIds.length) void notify({ userIds: assigneeIds, actor: actorOf(req), kind: "assigned", text: `assigned you the subtask “${title}” on ${t.project.key}-${t.number}`, projectId: t.projectId, ticketId: t.id }).catch(console.error);
   res.status(201).json(s);
 }));
 router.patch("/subtasks/:id", wrap(async (req, res) => {
@@ -630,6 +631,8 @@ router.patch("/subtasks/:id", wrap(async (req, res) => {
   if (d.status) d.done = d.status === "DONE"; else if (d.done !== undefined) (d as any).status = d.done ? "DONE" : "TODO"; // keep the two in step
   if ((d.done !== undefined) && cur.assigneeIds.length && !cur.assigneeIds.includes(req.user!.id)) return res.status(403).json({ error: "Only the people this subtask is assigned to can check or uncheck it." });
   const s = await prisma.subtask.update({ where: { id: cur.id }, data: d });
+  const newlyAssigned = (d.assigneeIds ?? []).filter((id) => !cur.assigneeIds.includes(id));
+  if (newlyAssigned.length) void notify({ userIds: newlyAssigned, actor: actorOf(req), kind: "assigned", text: `assigned you the subtask “${s.title}” on ${t.project.key}-${t.number}`, projectId: t.projectId, ticketId: t.id }).catch(console.error);
   if (s.status !== cur.status) touched(t, req, s.status === "DONE" ? `completed subtask “${s.title}”` : cur.status === "DONE" ? `reopened subtask “${s.title}” as ${s.status.toLowerCase().replace("_", " ")}` : `moved subtask “${s.title}” to ${s.status.toLowerCase().replace("_", " ")}`);
   res.json(s);
 }));
@@ -647,6 +650,7 @@ router.post("/subtasks/:id/remind", wrap(async (req, res) => {
     sendSubtaskReminderEmail({ to: u.email, name: u.name, actor: actor.name, project: t.project.name, ticket: { key, title: t.title }, subtask: cur.title, link: `${WEB_URL()}/?ticket=${t.id}` })
       .then((r) => { if (!r.sent) console.warn(`[mail] subtask reminder to ${u.email} not sent: ${r.error}`); }).catch(console.error);
   }
+  void notify({ userIds: cur.assigneeIds, actor, kind: "reminder", text: `reminded you about the subtask “${cur.title}” on ${key}`, projectId: t.projectId, ticketId: t.id }).catch(console.error); // in the app and on their phones, as well as the email
   touched(t, req, `sent a reminder for subtask “${cur.title}”`);
   res.json({ ok: true, remindedAt: new Date().toISOString() });
 }));

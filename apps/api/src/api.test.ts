@@ -205,7 +205,11 @@ describe("who can change a ticket", () => {
     expect((await api().patch(`/api/subtasks/${st.id}`).set(auth(bob.token)).send({ status: "REVIEW" })).body).toMatchObject({ status: "REVIEW", done: false });
     expect((await api().patch(`/api/subtasks/${st.id}`).set(auth(alice.token)).send({ status: "DONE" })).status).toBe(403);
     const open = (await mk({ title: "open", assigneeIds: [bob.id] })).body;
+    const got = async (kind: string, part: string) => { for (let i = 0; i < 40; i++) { const n = await prisma.notification.findFirst({ where: { userId: bob.id, kind, text: { contains: part } } }); if (n) return n; await new Promise((r) => setTimeout(r, 50)); } return null; };
+    expect(await got("assigned", "for bob")).not.toBeNull();      // being given a subtask is announced (in the app and as a push)
+    expect(await got("assigned", "open")).not.toBeNull();
     expect((await api().post(`/api/subtasks/${open.id}/remind`).set(auth(alice.token))).status).toBe(200);
+    expect(await got("reminder", "open")).not.toBeNull();         // the bell notifies too, not only emails
     expect((await api().post(`/api/subtasks/${open.id}/remind`).set(auth(alice.token))).status).toBe(409);
     const nobody = (await mk({ title: "nobody" })).body;
     expect((await api().post(`/api/subtasks/${nobody.id}/remind`).set(auth(alice.token))).status).toBe(400);

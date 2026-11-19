@@ -15,7 +15,8 @@ export const publicKey = () => process.env.VAPID_PUBLIC_KEY ?? null;
 let configured = false;
 const realSender: PushSender = async (sub, payload) => {
   if (!configured) { webpush.setVapidDetails(process.env.VAPID_SUBJECT || "https://example.invalid", process.env.VAPID_PUBLIC_KEY!, process.env.VAPID_PRIVATE_KEY!); configured = true; }
-  await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, JSON.stringify(payload), { TTL: 24 * 3600, urgency: "normal" });
+  // urgency "high": phones in power-saving mode still wake up for it
+  await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, JSON.stringify(payload), { TTL: 24 * 3600, urgency: "high" });
 };
 let sender: PushSender = realSender;
 let forced = false;
