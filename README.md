@@ -10,6 +10,8 @@ project; the creator becomes that project's **admin** and invites teammates by e
 - `packages/shared` – shared enums and zod schemas
 - Turborepo + pnpm workspaces
 
+**Live:** [tracker.bitcodes.co.in](https://tracker.bitcodes.co.in) · Built by [Aditya Sharma](https://github.com/addityaasharma) for Bitcode Software · [MIT licensed](LICENSE)
+
 ## Roles (per project)
 | Role | Can |
 |---|---|
@@ -64,3 +66,7 @@ accounts and email verification, privacy between projects, who may edit/move/del
 MCP endpoint, image uploads. The GitHub pipeline runs them against a throw-away Postgres before every deploy; a failing test stops the release.
 
 Also: dark mode (Profile → Appearance, follows the device by default), keyboard shortcuts (`?` lists them), phone layout, collapsible summary tiles.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
