@@ -11,7 +11,7 @@ import { prisma } from "./db";
 import { requireAuth, sessionUser, signToken } from "./auth";
 import { rateLimit } from "./rateLimit";
 import { BLOCKED_MSG, OVERDUE_LOCK_MSG, overdueBlocked } from "./lock";
-import { sendAssignmentEmail, sendInviteEmail, sendMentionEmail, sendPasswordResetEmail, sendSubtaskReminderEmail, sendVerifyEmail } from "./mail";
+import { sendAssignmentEmail, sendInviteEmail, sendInviteOtpEmail, sendMentionEmail, sendPasswordResetEmail, sendSubtaskReminderEmail, sendVerifyEmail } from "./mail";
 import { grant, openStream, publish, revoke } from "./events";
 import { notify, ticketAudience } from "./notifications";
 import { currentVia, newToken } from "./tokens"; // (routes.ts already has the same sha256 hashToken helper)
@@ -182,14 +182,35 @@ router.get("/invitations/token/:token", wrap(async (req, res) => {
   if (!inv) return res.status(404).json({ error: "This invitation is invalid or has expired" });
   const existing = await prisma.user.findUnique({ where: { email: inv.email }, select: { id: true } });
   const me = await sessionUser(req); // the browser's own session, if any (tells the page whether a password is needed)
-  res.json({ email: inv.email, project: inv.project?.name ?? null, invitedBy: inv.invitedBy.name, existingUser: !!existing, signedIn: me ? { email: me.email, matches: me.id === existing?.id } : null });
+  const otpRequired = !(await prisma.user.findFirst({ where: { email: inv.email, emailVerifiedAt: { not: null } }, select: { id: true } }));
+  res.json({ email: inv.email, project: inv.project?.name ?? null, invitedBy: inv.invitedBy.name, existingUser: !!existing, otpRequired, signedIn: me ? { email: me.email, matches: me.id === existing?.id } : null });
+}));
+
+/** Emails a 6-digit code to the invited address. Whoever claims the invite must type it, so a forwarded/leaked link alone is not enough. */
+router.post("/invitations/otp", rateLimit("inviteotp", 10, 15 * 60_000), wrap(async (req, res) => {
+  const { token } = z.object({ token: z.string().min(10) }).parse(req.body);
+  const inv = await findPending(token);
+  if (!inv) return res.status(404).json({ error: "This invitation is invalid or has expired" });
+  if (inv.otpSentAt && Date.now() - inv.otpSentAt.getTime() < 60_000) return res.json({ ok: true, throttled: true });
+  const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+  await prisma.invitation.update({ where: { id: inv.id }, data: { otpHash: hashToken(`${inv.id}:${code}`), otpExpiresAt: new Date(Date.now() + 10 * 60_000), otpSentAt: new Date(), otpAttempts: 0 } });
+  const mail = await sendInviteOtpEmail({ to: inv.email, code });
+  res.json({ ok: true, emailSent: mail.sent, emailError: mail.error });
 }));
 
 router.post("/invitations/accept", rateLimit("accept", 20, 15 * 60_000), wrap(async (req, res) => {
-  const { token, name, password } = acceptInviteSchema.parse(req.body);
+  const { token, name, password, otp } = acceptInviteSchema.parse(req.body);
   const inv = await findPending(token);
   if (!inv) return res.status(404).json({ error: "This invitation is invalid or has expired" });
   let user = await prisma.user.findUnique({ where: { email: inv.email } });
+  if (!user?.emailVerifiedAt) { // nobody has proven they own this mailbox yet: the emailed code is the proof
+    if (!otp) return res.status(403).json({ error: "Enter the 6-digit code we emailed you", otpRequired: true });
+    if (!inv.otpHash || !inv.otpExpiresAt || inv.otpExpiresAt < new Date() || inv.otpAttempts >= 5) return res.status(403).json({ error: "That code has expired. Request a new one", otpRequired: true });
+    if (inv.otpHash !== hashToken(`${inv.id}:${otp}`)) {
+      await prisma.invitation.update({ where: { id: inv.id }, data: { otpAttempts: { increment: 1 } } });
+      return res.status(403).json({ error: "Wrong code", otpRequired: true });
+    }
+  }
   if (user) {
     // existing account: either this browser is already signed in as that very account (no password needed), or they prove it's them
     const me = await sessionUser(req);

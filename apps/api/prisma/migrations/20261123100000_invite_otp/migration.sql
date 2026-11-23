@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "Invitation" ADD COLUMN "otpHash" TEXT,
+ADD COLUMN "otpExpiresAt" TIMESTAMP(3),
+ADD COLUMN "otpSentAt" TIMESTAMP(3),
+ADD COLUMN "otpAttempts" INTEGER NOT NULL DEFAULT 0;

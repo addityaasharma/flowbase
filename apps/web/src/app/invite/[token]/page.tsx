@@ -4,7 +4,7 @@ import { FlowbaseMark } from "@/components/Logo";
 import { api, tokenStore } from "@/lib/api";
 import { btnPrimary, inputCls } from "@/components/Bits";
 
-type Info = { email: string; project: string | null; invitedBy: string; existingUser: boolean; signedIn: { email: string; matches: boolean } | null };
+type Info = { email: string; project: string | null; invitedBy: string; existingUser: boolean; otpRequired: boolean; signedIn: { email: string; matches: boolean } | null };
 
 export default function AcceptInvite({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
@@ -14,6 +14,15 @@ export default function AcceptInvite({ params }: { params: Promise<{ token: stri
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [otpNote, setOtpNote] = useState("");
+  const sendCode = async () => {
+    setOtpNote("");
+    try {
+      const r = await api<{ emailSent?: boolean; emailError?: string; throttled?: boolean }>("/invitations/otp", { method: "POST", json: { token } });
+      setOtpNote(r.throttled ? "A code was sent a moment ago. Check your inbox, or try again in a minute." : r.emailSent ? `Code sent to ${info?.email}.` : `Couldn't send the email: ${r.emailError ?? "unknown error"}`);
+    } catch (err) { setOtpNote((err as Error).message); }
+  };
 
   useEffect(() => { api<Info>(`/invitations/token/${token}`).then(setInfo).catch((e) => setInvalid(e.message)); }, [token]);
 
@@ -30,7 +39,7 @@ export default function AcceptInvite({ params }: { params: Promise<{ token: stri
           <form className="space-y-3" onSubmit={async (e) => {
             e.preventDefault(); setBusy(true); setError("");
             try {
-              const r = await api<{ token: string }>("/invitations/accept", { method: "POST", json: { token, name: info?.existingUser ? undefined : name, password: info?.signedIn?.matches ? undefined : password } });
+              const r = await api<{ token: string }>("/invitations/accept", { method: "POST", json: { token, name: info?.existingUser ? undefined : name, password: info?.signedIn?.matches ? undefined : password, otp: info?.otpRequired ? otp : undefined } });
               tokenStore.set(r.token);
               location.href = "/";
             } catch (err) { setError((err as Error).message); setBusy(false); }
@@ -43,6 +52,13 @@ export default function AcceptInvite({ params }: { params: Promise<{ token: stri
             )}
             {!info.existingUser && <input autoFocus className={inputCls} placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} required />}
             {!info.signedIn?.matches && <input className={inputCls} type="password" placeholder={info.existingUser ? "Your password" : "Choose a password (min 8)"} minLength={info.existingUser ? undefined : 8} value={password} onChange={(e) => setPassword(e.target.value)} required />}
+            {info.otpRequired && (
+              <div className="space-y-2">
+                <input className={inputCls} inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="\d{6}" placeholder="6-digit code from your email" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))} required />
+                <button type="button" className="text-xs font-medium text-slate-500 underline" onClick={sendCode}>Email me a code</button>
+                {otpNote && <p className="text-xs text-slate-500">{otpNote}</p>}
+              </div>
+            )}
             {error && <p className="text-sm text-rose-600">{error}</p>}
             <button className={btnPrimary + " w-full"} disabled={busy}>{busy ? "Joining…" : info.signedIn?.matches ? (info.project ? `Join ${info.project}` : "Join") : info.existingUser ? "Sign in & join" : "Join workspace"}</button>
           </form>
