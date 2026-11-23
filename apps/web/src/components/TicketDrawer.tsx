@@ -182,6 +182,10 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
   const qc = useQueryClient();
   const [comment, setComment] = usePersisted(`ticket:${id}:comment`, "");
   const [showActivity, setShowActivity] = useState(false);
+  // description fold state: remembered on this device until the user changes it (SSR-safe: read after mount)
+  const [descOpen, setDescOpen] = useState(true);
+  useEffect(() => { try { if (localStorage.getItem("flowbase:descCollapsed") === "1") setDescOpen(false); } catch { /* default open */ } }, []);
+  const toggleDesc = () => setDescOpen((o) => { try { localStorage.setItem("flowbase:descCollapsed", o ? "1" : "0"); } catch { /* not remembered */ } return !o; });
   const [editingDesc, setEditingDesc] = usePersisted(`ticket:${id}:editingDesc`, false);
   const [descDraft, setDescDraft] = usePersisted(`ticket:${id}:descDraft`, "");
   const [replyTo, setReplyTo] = usePersisted<{ id: string; name: string } | null>(`ticket:${id}:replyTo`, null);
@@ -284,10 +288,12 @@ export function TicketDrawer({ id, onClose }: { id: string; onClose: () => void 
 
                   <section>
                     <div className="mb-2 flex items-center justify-between">
-                      <h3 className="text-sm font-semibold">Description</h3>
-                      {canEdit && !editingDesc && t.description && <button onClick={startEdit} className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-indigo-600"><Pencil className="h-3.5 w-3.5" />Edit</button>}
+                      <button type="button" onClick={toggleDesc} aria-expanded={descOpen} className="flex items-center gap-1 text-sm font-semibold">
+                        <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${descOpen ? "" : "-rotate-90"}`} />Description
+                      </button>
+                      {descOpen && canEdit && !editingDesc && t.description && <button onClick={startEdit} className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-indigo-600"><Pencil className="h-3.5 w-3.5" />Edit</button>}
                     </div>
-                    {editingDesc ? (
+                    {!descOpen && !editingDesc ? null : editingDesc ? (
                       <div className="space-y-2">
                         <RichEditor value={descDraft} onChange={setDescDraft} rows={8} autoFocus placeholder="Describe the task. Use bullets, checklists, or paste an image." onSubmit={saveDesc} />
                         <div className="flex justify-end gap-2">
