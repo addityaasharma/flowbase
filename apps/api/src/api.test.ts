@@ -197,8 +197,16 @@ describe("who can change a ticket", () => {
     const t3 = await invite({ email: `nobody.${tag}@test.invalid` });
     const info = (await api().get(`/api/invitations/token/${t3}`)).body;
     expect(info.existingUser).toBe(false); expect(info.signedIn).toBeNull();
-    expect((await api().post("/api/invitations/accept").send({ token: t3, name: "New Person" })).status).toBe(400); // a new account needs a password
-    const created = await api().post("/api/invitations/accept").send({ token: t3, name: "New Person", password: "password123" });
+    // a brand-new account (mailbox not yet proven) also needs the emailed code, so a forwarded link alone is useless
+    expect(info.otpRequired).toBe(true);
+    expect((await api().post("/api/invitations/accept").send({ token: t3, name: "New Person", password: "password123" })).status).toBe(403);
+    expect((await api().post("/api/invitations/otp").send({ token: t3 })).status).toBe(200);
+    const invRow = await prisma.invitation.findFirstOrThrow({ where: { email: `nobody.${tag}@test.invalid` } });
+    const setCode = (c: string) => prisma.invitation.update({ where: { id: invRow.id }, data: { otpHash: hashToken(`${invRow.id}:${c}`), otpExpiresAt: new Date(Date.now() + 6e5), otpAttempts: 0 } });
+    await setCode("123456");
+    expect((await api().post("/api/invitations/accept").send({ token: t3, name: "New Person", password: "password123", otp: "654321" })).status).toBe(403);
+    expect((await api().post("/api/invitations/accept").send({ token: t3, name: "New Person", otp: "123456" })).status).toBe(400); // a new account needs a password
+    const created = await api().post("/api/invitations/accept").send({ token: t3, name: "New Person", password: "password123", otp: "123456" });
     expect(created.status).toBe(201); created_users_cleanup(created.body.user.id);
   });
   it("the welcome tour is offered to new sign-ups once", async () => {

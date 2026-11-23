@@ -50,6 +50,15 @@ export function sendInviteEmail(opts: { to: string; link: string; inviter: strin
   return deliver(opts.to, "You're invited to Flowbase", html, opts.link);
 }
 
+export function sendInviteOtpEmail(o: { to: string; code: string }) {
+  const html = shell("Your Flowbase invitation code",
+    `<p style="color:#6e6e73;line-height:1.5">Enter this code to confirm this is your email and join Flowbase:</p>
+     <p style="font-size:32px;letter-spacing:8px;font-weight:700;margin:20px 0">${o.code}</p>
+     <p style="color:#86868b;font-size:13px">The code expires in 10 minutes.</p>`,
+    "If you didn't try to accept an invitation, ignore this email. Nobody can join without this code.");
+  return deliver(o.to, `${o.code} is your Flowbase invitation code`, html, `code ${o.code}`);
+}
+
 export function sendPasswordResetEmail(o: { to: string; name: string; link: string }) {
   const html = shell("Reset your Flowbase password",
     `<p style="color:#6e6e73;line-height:1.5">Hi ${esc(o.name.split(" ")[0])}, we received a request to reset your password.</p>${button(o.link, "Choose a new password")}
